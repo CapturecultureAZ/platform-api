@@ -1,14 +1,14 @@
+
 const express = require('express');
 const router = express.Router();
 
-// In-memory codes
 const codes = new Map();
 
-function randomCode(len = 6) {
+function randomCode(length = 6) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+  let s = '';
+  for (let i = 0; i < length; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
 }
 
 router.post('/codes', (req, res) => {
@@ -55,7 +55,7 @@ router.post('/codes/validate', (req, res) => {
       tier: rec.tier,
       remainingUses: rec.usesAllowed - rec.usesUsed,
       expiresAt: rec.expiresAt,
-      consumedNow: !!consume,
+      consumedNow: !!consume
     });
   } catch (e) {
     console.error('POST /codes/validate error:', e);
