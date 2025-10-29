@@ -24,3 +24,14 @@ const PORT = Number(process.env.PORT || 3000);
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
+
+/* ---- auto-added: connect to MongoDB on boot (no file editor used) ---- */
+;(async () => {
+  try {
+    const { connectMongo } = require('./lib/db');
+    await connectMongo();
+    console.log('✅ MongoDB connected');
+  } catch (e) {
+    console.warn('⚠️ Mongo connect failed; continuing:', e.message);
+  }
+})();
