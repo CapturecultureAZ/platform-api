@@ -14,6 +14,8 @@ app.get('/api/health', (req, res) => {
 // Codes router
 const codesRouter = require('./routes-folder/codes');
 app.use('/api', codesRouter);
+app.use('/api', require('./routes-folder/square'));
+
 
 // Root
 app.get('/', (req, res) => {
