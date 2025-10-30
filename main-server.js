@@ -5,6 +5,7 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.get('/__whoami', (req,res)=>res.json({ file: __filename, routes: (app._router?.stack||[]).filter(r=>r.route).map(r=>Object.keys(r.route.methods)[0].toUpperCase()+' '+r.route.path) }));
 
 // Health
 app.get('/api/health', (req, res) => {

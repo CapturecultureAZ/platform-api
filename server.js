@@ -6,6 +6,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
+app.get('/__whoami', (req,res)=>res.json({ file: __filename, routes: (app._router?.stack||[]).filter(r=>r.route).map(r=>Object.keys(r.route.methods)[0].toUpperCase()+' '+r.route.path) }));
+
 // Blank homepage so root URL shows something
 app.get('/', (_req, res) => {
   res.send(`
