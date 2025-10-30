@@ -9,6 +9,14 @@ app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
 app.get('/', (_req, res) => res.send('✅ Platform API is running'));
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
+app.post('/api/codes/validate', express.json(), (req, res) => {
+  const code = String(req.body?.code || '').toUpperCase();
+  if (code === 'TEST01') {
+    return res.json({ ok: true, tier: 'single', usesRemaining: 0 });
+  }
+  return res.status(404).json({ ok: false, error: 'not_found' });
+});
+
 ('/__whoami', 
 (req,res)=>res.json({ file: __filename, routes: (app._router?.stack||[]).filter(r=>r.route).map(r=>Object.keys(r.route.methods)[0].toUpperCase()+' '+r.route.path) }));
 
