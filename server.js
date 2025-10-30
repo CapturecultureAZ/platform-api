@@ -5,7 +5,7 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json());
-
+app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
 // Blank homepage so root URL shows something
 app.get('/', (_req, res) => {
   res.send(`
