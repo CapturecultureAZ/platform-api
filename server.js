@@ -6,6 +6,25 @@ const { connectToMongo } = require('./lib/db');
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Blank site route (so your URL shows something)
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <title>Capture Culture Platform API</title>
+      <style>
+        body { background:white; color:black; font-family:sans-serif; }
+        h1 { margin-top:20%; text-align:center; }
+      </style>
+    </head>
+    <body>
+      <h1>Capture Culture Platform API is running</h1>
+    </body>
+    </html>
+  `);
+});
 
 // Health route (always available)
 app.get('/api/health', (req, res) => {
