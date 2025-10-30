@@ -1,64 +1,47 @@
-
 const express = require('express');
 const router = express.Router();
+const { getDb } = require('../lib/db');
+const tiers = require('../lib/tiers'); // optional if you've added tiers.js
 
-const codes = new Map();
-
-function randomCode(length = 6) {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s = '';
-  for (let i = 0; i < length; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
-
-router.post('/codes', (req, res) => {
-  try {
-    const { tier = 'single', usesAllowed = 1, minutesToLive = 1440 } = req.body || {};
-    if (!usesAllowed || usesAllowed < 1) return res.status(400).json({ error: 'usesAllowed must be >= 1' });
-    if (!minutesToLive || minutesToLive < 1) return res.status(400).json({ error: 'minutesToLive must be >= 1' });
-
-    const code = randomCode(6);
-    const now = Date.now();
-    const expiresAt = new Date(now + minutesToLive * 60 * 1000).toISOString();
-
-    codes.set(code, { code, tier, usesAllowed, usesUsed: 0, expiresAt });
-    res.status(201).json({ code, tier, usesAllowed, expiresAt });
-  } catch (e) {
-    console.error('POST /codes error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-router.post('/codes/validate', (req, res) => {
+router.post('/codes/validate', async (req, res) => {
   try {
     const { code, consume = false } = req.body || {};
     if (!code) return res.status(400).json({ valid: false, error: 'Missing code' });
 
-    const rec = codes.get(code);
-    if (!rec) return res.status(404).json({ valid: false, error: 'Not found' });
+    const db = getDb();
+    const col = db.collection('codes');
+
+    const record = await col.findOne({ code });
+    if (!record) return res.status(404).json({ valid: false, error: 'Not found' });
 
     const now = Date.now();
-    if (new Date(rec.expiresAt).getTime() <= now) {
-      codes.delete(code);
-      return res.status(410).json({ valid: false, error: 'Expired' });
+    if (now > new Date(record.expiresAt).getTime()) {
+      await col.deleteOne({ code });
+      return res.json({ valid: false, error: 'Expired' });
     }
 
-    if (rec.usesUsed >= rec.usesAllowed) {
-      return res.status(409).json({ valid: false, error: 'Exhausted' });
+    if (consume && !record.consumed) {
+      const newUsesUsed = (record.usesUsed || 0) + 1;
+      const fullyUsed = newUsesUsed >= (record.usesAllowed || 1);
+      await col.updateOne({ code }, { $set: { usesUsed: newUsesUsed, consumed: fullyUsed } });
     }
 
-    if (consume) rec.usesUsed += 1;
+    const latest = await col.findOne({ code });          // ← refetch after update
+    const t = (tiers && tiers[latest.tier]) || {};       // optional enrichment
 
-    res.json({
+    return res.json({
+      ok: true,
       valid: true,
-      code: rec.code,
-      tier: rec.tier,
-      remainingUses: rec.usesAllowed - rec.usesUsed,
-      expiresAt: rec.expiresAt,
-      consumedNow: !!consume
+      consumed: !!latest.consumed,
+      usesUsed: latest.usesUsed || 0,
+      usesAllowed: latest.usesAllowed || 1,
+      tier: latest.tier,
+      presetId: t.presetId,
+      shots: t.shots,
+      expiresAt: latest.expiresAt
     });
-  } catch (e) {
-    console.error('POST /codes/validate error:', e);
+  } catch (err) {
+    console.error('POST /codes/validate error:', err);
     res.status(500).json({ valid: false, error: 'Server error' });
   }
 });
