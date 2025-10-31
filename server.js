@@ -20,13 +20,21 @@ app.use('/api', codesRouter);
 
 // Connect to Mongo first, then start the server
 const PORT = Number(process.env.PORT || 3000);
+function startServer() {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server running on :${PORT}`);
+  });
+}
+
+// Try DB, but don't crash if it fails — log why and still start the API
 connectToMongo()
   .then(() => {
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ Server running on :${PORT}`);
-    });
+    console.log('✅ MongoDB connected');
+    startServer();
   })
   .catch((err) => {
-    console.error('❌ Failed to connect to Mongo:', err.message);
-    process.exit(1);
+    console.error('⚠️ Mongo connect FAILED:', err && err.stack ? err.stack : err);
+    startServer();
   });
+
+   
