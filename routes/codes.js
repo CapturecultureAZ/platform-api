@@ -1,49 +1,52 @@
 const express = require('express');
 const router = express.Router();
-const { getDb } = require('../lib/db');
-const tiers = require('../lib/tiers'); // optional if you've added tiers.js
 
-router.post('/codes/validate', async (req, res) => {
-  try {
-    const { code, consume = false } = req.body || {};
-    if (!code) return res.status(400).json({ valid: false, error: 'Missing code' });
+// Simple in-memory store for testing (resets on restart)
+const mem = new Map();
 
-    const db = getDb();
-    const col = db.collection('codes');
+function genCode(n = 6) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < n; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
 
-    const record = await col.findOne({ code });
-    if (!record) return res.status(404).json({ valid: false, error: 'Not found' });
+// POST /api/codes  -> create a code
+router.post('/codes', (req, res) => {
+  const { tier = 'single', usesAllowed = 1, minutesToLive = 1440 } = req.body || {};
+  const code = genCode();
+  const expiresAtMs = Date.now() + Number(minutesToLive) * 60 * 1000;
 
-    const now = Date.now();
-    if (now > new Date(record.expiresAt).getTime()) {
-      await col.deleteOne({ code });
-      return res.json({ valid: false, error: 'Expired' });
-    }
+  mem.set(code, {
+    tier: String(tier),
+    usesRemaining: Number(usesAllowed),
+    expiresAt: expiresAtMs,
+  });
 
-    if (consume && !record.consumed) {
-      const newUsesUsed = (record.usesUsed || 0) + 1;
-      const fullyUsed = newUsesUsed >= (record.usesAllowed || 1);
-      await col.updateOne({ code }, { $set: { usesUsed: newUsesUsed, consumed: fullyUsed } });
-    }
+  res.json({
+    ok: true,
+    code,
+    tier: String(tier),
+    usesAllowed: Number(usesAllowed),
+    expiresAt: new Date(expiresAtMs).toISOString(),
+  });
+});
 
-    const latest = await col.findOne({ code });          // ← refetch after update
-    const t = (tiers && tiers[latest.tier]) || {};       // optional enrichment
+// POST /api/codes/validate  -> check a code, optionally consume
+router.post('/codes/validate', (req, res) => {
+  const { code = '', consume = false } = req.body || {};
+  const key = String(code).toUpperCase();
+  const rec = mem.get(key);
 
-    return res.json({
-      ok: true,
-      valid: true,
-      consumed: !!latest.consumed,
-      usesUsed: latest.usesUsed || 0,
-      usesAllowed: latest.usesAllowed || 1,
-      tier: latest.tier,
-      presetId: t.presetId,
-      shots: t.shots,
-      expiresAt: latest.expiresAt
-    });
-  } catch (err) {
-    console.error('POST /codes/validate error:', err);
-    res.status(500).json({ valid: false, error: 'Server error' });
+  if (!rec) return res.status(404).json({ ok: false, error: 'CODE_NOT_FOUND' });
+  if (rec.expiresAt < Date.now()) return res.status(400).json({ ok: false, error: 'EXPIRED' });
+
+  if (consume) {
+    if (rec.usesRemaining <= 0) return res.status(400).json({ ok: false, error: 'NO_USES_LEFT' });
+    rec.usesRemaining -= 1;
   }
+
+  res.json({ ok: true, tier: rec.tier, usesRemaining: rec.usesRemaining });
 });
 
 module.exports = router;
