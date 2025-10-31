@@ -84,8 +84,7 @@ router.post('/codes/validate', async (req, res) => {
 });
 
 // GET /api/admin/codes -> list codes (newest first)
-// Query params:
-//   limit=50 (default), includeExpired=true (default false)
+// Query params: limit=50 (default), includeExpired=true (default false)
 router.get('/admin/codes', async (req, res) => {
   try {
     const db = getDb();
