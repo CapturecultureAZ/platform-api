@@ -3,6 +3,9 @@ const express = require('express');
 const cors = require('cors');
 
 const app = express();
+cd ~/capture-culture/platform-api
+open -a TextEdit server.js
+const { connectToMongo, getDb } = require('./lib/db');
 app.use(cors());
 app.use(express.json());
 app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
