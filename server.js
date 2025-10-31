@@ -1,49 +1,32 @@
-// Minimal, known-good server for Render
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
 const app = express();
-cd ~/capture-culture/platform-api
-open -a TextEdit server.js
-const { connectToMongo, getDb } = require('./lib/db');
 app.use(cors());
 app.use(express.json());
-app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
+
+// Root (keeps Render happy)
 app.get('/', (_req, res) => res.send('✅ Platform API is running'));
+
+// Health + Ping
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
-app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
-app.post('/api/codes/validate', express.json(), (req, res) => {
-  const code = String(req.body?.code || '').toUpperCase();
-  if (code === 'TEST01') {
-    return res.json({ ok: true, tier: 'single', usesRemaining: 0 });
-  }
-  return res.status(404).json({ ok: false, error: 'not_found' });
+app.get('/api/ping',   (_req, res) => res.json({ ok: true, pong: true }));
+
+// Debug route to see what's mounted
+app.get('/__whoami', (_req, res) => {
+  const routes = (app._router?.stack || [])
+    .filter(r => r.route)
+    .map(r => `${Object.keys(r.route.methods)[0].toUpperCase()} ${r.route.path}`);
+  res.json({ file: __filename, routes });
 });
 
-('/__whoami', 
-(req,res)=>res.json({ file: __filename, routes: (app._router?.stack||[]).filter(r=>r.route).map(r=>Object.keys(r.route.methods)[0].toUpperCase()+' '+r.route.path) }));
+// Mount your real codes router (you confirmed this file exists)
+const codesRouter = require('./routes/codes');
+app.use('/api', codesRouter);
 
-// Blank homepage so root URL shows something
-app.get('/', (_req, res) => {
-  res.send(`
-    <!doctype html>
-    <html lang="en"><head>
-      <meta charset="utf-8" />
-      <title>Capture Culture API</title>
-      <style>body{margin:0;font-family:sans-serif;display:grid;place-items:center;height:100vh}</style>
-    </head><body>
-      <h1>✅ Platform API is running</h1>
-    </body></html>
-  `);
-});
-
-// Simple health route
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
-});
-
-// IMPORTANT: Render requires you to listen on process.env.PORT
+// Start server (bind to 0.0.0.0 for Render)
 const PORT = Number(process.env.PORT || 3000);
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on :${PORT}`);
 });
