@@ -108,5 +108,27 @@ router.get('/admin/codes', async (req, res) => {
     res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
   }
 });
+// GET /api/admin/codes -> list codes (newest first)
+router.get('/admin/codes', async (req, res) => {
+  try {
+    const db = getDb();
+    const codes = db.collection('codes');
+    const now = new Date();
 
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+    const includeExpired = String(req.query.includeExpired || 'false').toLowerCase() === 'true';
+    const filter = includeExpired ? {} : { expiresAt: { $gt: now } };
+
+    const items = await codes
+      .find(filter, { projection: { _id: 0 } })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    res.json({ ok: true, count: items.length, items });
+  } catch (err) {
+    console.error('admin list error:', err);
+    res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+  }
+});
 module.exports = router;
