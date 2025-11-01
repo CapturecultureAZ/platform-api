@@ -1,19 +1,18 @@
 {
   "name": "platform-api",
   "version": "1.0.0",
+  "description": "",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "cleanup": "node scripts/cleanup-expired.js",
-    "codes": "node scripts/admin-list-codes.js"
-  },
+    "start": "node server.js"},
+    "test": "echo \"Error: no test specified\" && exit 1",
   "keywords": [],
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": "20.x"
- },
- "dependencies": {
+    "node": ">=18"
+  },
+  "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
