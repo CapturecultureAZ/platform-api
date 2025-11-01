@@ -76,3 +76,8 @@ app.get('/__version', (req, res) => {
 console.log('BOOT => commit:', process.env.RENDER_GIT_COMMIT || process.env.COMMIT_REF || 'unknown',
             'branch:', process.env.RENDER_GIT_BRANCH || 'unknown',
             'mock:', String(process.env.USE_MOCK_DB || ''));
+
+// --- ultra simple test route ---
+app.get('/hello', (req, res) => {
+  res.json({ ok: true, msg: 'hello from server.js' });
+});
