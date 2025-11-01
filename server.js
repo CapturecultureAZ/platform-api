@@ -109,3 +109,58 @@ app.get('/api/admin/ping', (req, res) => {
   }
   res.json({ ok:true, msg:'admin alive' });
 });
+// --- secured env peek (what the app really sees) ---
+app.get('/api/admin/envpeek', (req, res) => {
+  const key = req.get('x-admin-key');
+  if (key !== process.env.ADMIN_KEY) return res.status(401).json({ ok:false, error:'UNAUTHORIZED' });
+
+  const uri = process.env.MONGO_URI || '';
+  const show = (s) => (s ? (s.length <= 16 ? s : (s.slice(0,12) + '...' + s.slice(-6))) : '');
+
+  res.json({
+    ok: true,
+    USE_MOCK_DB: String(process.env.USE_MOCK_DB || ''),
+    has_MONGO_URI: Boolean(uri),
+    MONGO_URI_preview: show(uri),
+    NODE_VERSION: process.version,
+    RENDER_GIT_COMMIT: process.env.RENDER_GIT_COMMIT || 'unknown',
+    RENDER_GIT_BRANCH: process.env.RENDER_GIT_BRANCH || 'unknown'
+  });
+});
+
+// --- on-demand MongoDB test (secured) ---
+app.get('/api/admin/dbtest', async (req, res) => {
+  try {
+    const key = req.get('x-admin-key');
+    if (key !== process.env.ADMIN_KEY) return res.status(401).json({ ok:false, error:'UNAUTHORIZED' });
+
+    const uri = process.env.MONGO_URI;
+    if (!uri) return res.status(400).json({ ok:false, error:'MONGO_URI_MISSING' });
+
+    const { MongoClient, ServerApiVersion } = require('mongodb');
+    const client = new MongoClient(uri, {
+      serverApi: ServerApiVersion.v1,
+      tls: true,
+      retryWrites: true,
+      serverSelectionTimeoutMS: 15000,
+      heartbeatFrequencyMS: 10000
+    });
+
+    const t0 = Date.now();
+    await client.connect();
+    const admin = client.db().admin();
+    const ping = await admin.ping().catch(e => ({ pingError: e.message }));
+    const dbName = uri.split('/').pop().split('?')[0] || 'captureculture';
+    const codesCount = await client.db(dbName).collection('codes').countDocuments().catch(() => null);
+    await client.close();
+
+    res.json({ ok:true, ms: Date.now()-t0, ping, db: dbName, codesCount });
+  } catch (e) {
+    res.status(500).json({
+      ok:false,
+      error:'CONNECT_FAILED',
+      message: e.message,
+      firstStack: String(e.stack||'').split('\n')[0]
+    });
+  }
+});
