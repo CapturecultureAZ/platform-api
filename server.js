@@ -38,3 +38,32 @@ connectToMongo()
   });
 
    
+// --- Admin routes (simple key) ---
+app.get('/api/admin/codes', async (req, res) => {
+  try {
+    const key = req.get('x-admin-key');
+    if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
+      return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+    }
+    const includeExpired = String(req.query.includeExpired || 'false').toLowerCase() === 'true';
+    const limit = Math.min(parseInt(req.query.limit || '100', 10), 500);
+
+    const db = require('./lib/db').getDb();
+    const query = includeExpired ? {} : { expiresAt: { $gt: new Date() } };
+    const items = await db.collection('codes').find(query).toArray();
+
+    items.sort((a, b) => new Date(b.expiresAt) - new Date(a.expiresAt));
+    return res.json({ ok: true, count: Math.min(items.length, limit), codes: items.slice(0, limit) });
+  } catch (e) {
+    console.error('admin/codes error', e);
+    return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// Quick diagnostics: which routes are mounted
+app.get('/__whoami', (req, res) => {
+  const routes = (app._router?.stack || [])
+    .filter(r => r.route && r.route.path)
+    .map(r => `${Object.keys(r.route.methods)[0].toUpperCase()} ${r.route.path}`);
+  res.json({ file: __filename, routes });
+});
