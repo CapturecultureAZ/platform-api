@@ -81,3 +81,31 @@ console.log('BOOT => commit:', process.env.RENDER_GIT_COMMIT || process.env.COMM
 app.get('/hello', (req, res) => {
   res.json({ ok: true, msg: 'hello from server.js' });
 });
+
+// --- ultra-simple test route ---
+app.get('/hello', (req, res) => {
+  res.json({ ok: true, msg: 'hello from server.js' });
+});
+
+// --- admin ping (auth only, no DB) ---
+app.get('/api/admin/ping', (req, res) => {
+  const key = req.get('x-admin-key');
+  if (key !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ ok:false, error:'UNAUTHORIZED' });
+  }
+  res.json({ ok:true, msg:'admin alive' });
+});
+
+// --- ultra-simple test route ---
+app.get('/hello', (req, res) => {
+  res.json({ ok: true, msg: 'hello from server.js' });
+});
+
+// --- admin ping (auth only, no DB) ---
+app.get('/api/admin/ping', (req, res) => {
+  const key = req.get('x-admin-key');
+  if (key !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ ok:false, error:'UNAUTHORIZED' });
+  }
+  res.json({ ok:true, msg:'admin alive' });
+});
