@@ -62,3 +62,17 @@ connectToMongo()
     console.error('⚠️ DB connect failed, starting server anyway:', err.message);
     app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on :${PORT} (DB unavailable)`));
   });
+
+// --- Version/debug endpoint ---
+app.get('/__version', (req, res) => {
+  res.json({
+    ok: true,
+    commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_REF || 'unknown',
+    branch: process.env.RENDER_GIT_BRANCH || 'unknown',
+    mock: String(process.env.USE_MOCK_DB || ''),
+    node: process.version
+  });
+});
+console.log('BOOT => commit:', process.env.RENDER_GIT_COMMIT || process.env.COMMIT_REF || 'unknown',
+            'branch:', process.env.RENDER_GIT_BRANCH || 'unknown',
+            'mock:', String(process.env.USE_MOCK_DB || ''));
