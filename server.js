@@ -164,3 +164,49 @@ app.get('/api/admin/dbtest', async (req, res) => {
     });
   }
 });
+
+// --- on-demand MongoDB test (no restart needed), secured by x-admin-key ---
+app.get('/api/admin/dbtest', async (req, res) => {
+  try {
+    const key = req.get('x-admin-key');
+    if (key !== process.env.ADMIN_KEY) return res.status(401).json({ ok:false, error:'UNAUTHORIZED' });
+
+    const { MongoClient, ServerApiVersion } = require('mongodb');
+    const uri = process.env.MONGO_URI;
+    if (!uri) return res.status(400).json({ ok:false, error:'MONGO_URI_MISSING' });
+
+    const client = new MongoClient(uri, {
+      serverApi: ServerApiVersion.v1,
+      tls: true,
+      serverSelectionTimeoutMS: 15000,
+      heartbeatFrequencyMS: 10000,
+      retryWrites: true
+    });
+
+    const started = Date.now();
+    await client.connect();
+    const admin = client.db().admin();
+    const ping = await admin.ping();
+
+    // Try a lightweight read on your db/collection
+    const dbName = uri.split('/').pop().split('?')[0] || 'captureculture';
+    const count = await client.db(dbName).collection('codes').countDocuments().catch(() => null);
+
+    await client.close();
+
+    return res.json({
+      ok: true,
+      ms: Date.now() - started,
+      ping,
+      db: dbName,
+      codesCount: count
+    });
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: 'CONNECT_FAILED',
+      message: e.message,
+      firstStack: String(e.stack || '').split('\n')[0]
+    });
+  }
+});
