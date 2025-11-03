@@ -25,3 +25,6 @@ app.get('/__whoami', (req, res) => {
     });
   res.json({ file: __filename, routes });
 });
+
+// --- mount api routers ---
+app.use('/api', require('./routes/codes'));
