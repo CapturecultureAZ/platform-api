@@ -1,10 +1,10 @@
-require('dotenv').config();
+I have yetrequire('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { connectToMongo, getDb } = require('./lib/db');
 
 const app = express();
-app.use(cors());
+app.use(cors()); OK all require OK College abuse King
 app.use(express.json());
 
 // Home + health
@@ -23,12 +23,7 @@ app.get('/__whoami', (req, res) => {
 });
 
 // Mount codes router (/api/codes, /api/codes/validate)
-try {
-  const codesRouter = require('./routes/codes');
-  app.use('/api', codesRouter);
-} catch (e) {
-  console.error('Failed to mount codes router:', e.message);
-}
+app.use('/api', require('./routes/codes'));
 
 // Admin: list codes (requires x-admin-key)
 app.get('/api/admin/codes', async (req, res) => {
