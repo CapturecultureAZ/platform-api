@@ -1,4 +1,14 @@
+# node
 node_modules
+npm-debug.log*
 .env
 .DS_Store
-npm-debug.log*
+
+# editor junk
+*.swp
+*.tmp
+
+# accidental text dumps
+ok:true
+pong:true
+{ok:true}
