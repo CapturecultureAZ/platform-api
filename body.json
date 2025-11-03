@@ -1,1 +1,1 @@
-{"event_id":"evt_live_probe_1","type":"payment.updated","data":{"object":{"payment":{"id":"PAY123","status":"COMPLETED","reference_id":"ORDER-1","amount_money":{"amount":900,"currency":"USD"}}}}}}
+{"event_id":"evt_test_1","type":"payment.updated","data":{"object":{"payment":{"id":"PAY123","status":"COMPLETED","reference_id":"ORDER-1","amount_money":{"amount":900,"currency":"USD"}}}}}}

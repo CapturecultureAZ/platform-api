@@ -1,45 +1,40 @@
+const express = require('express');
 const crypto = require('crypto');
-const { getDb } = require('../lib/db');
+const router = express.Router();
 
-function genCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+// HMAC over: SQUARE_WEBHOOK_URL + raw body bytes
+function verify(req) {
+  const notifUrl = process.env.SQUARE_WEBHOOK_URL || '';
+  const key = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || '';
+  if (!notifUrl || !key) return false;
+
+  const raw = Buffer.concat([Buffer.from(notifUrl, 'utf8'), req.rawBody || Buffer.from('')]);
+  const expected = crypto.createHmac('sha256', key).update(raw).digest('base64');
+  const got = req.header('x-square-hmacsha256') || '';
+  try { return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected)); }
+  catch { return false; }
 }
 
-function verifySquareSignature(req, signatureKey) {
-  try {
-    const sig = req.get('x-square-hmacsha256-signature') || '';
-    const body = JSON.stringify(req.body || {});
-    const hmac = crypto.createHmac('sha256', signatureKey);
-    hmac.update(body);
-    const expected = hmac.digest('base64');
-    return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
+router.post('/square-webhook', (req, res) => {
+  if (!verify(req)) return res.status(401).json({ ok:false, error:'BAD_SIGNATURE' });
 
-module.exports = require('express').Router().post('/square-webhook', async (req, res) => {
-  const DEV_BYPASS = String(process.env.DEV_WEBHOOK_BYPASS || '').toLowerCase() === 'true';
-  const KEY = process.env.SQUARE_SIGNATURE_KEY || '';
+  const type = req.body?.type;
+  const payment = req.body?.data?.object?.payment;
 
-  if (!DEV_BYPASS) {
-    if (!KEY) return res.status(401).json({ ok: false, error: 'Missing signature key' });
-    const ok = verifySquareSignature(req, KEY);
-    if (!ok) return res.status(401).json({ ok: false, error: 'Invalid signature' });
+  if (type === 'payment.updated' && payment?.status === 'COMPLETED') {
+    // issue a 24h code (simple demo writes to the in-memory store)
+    const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const expiresAt = new Date(Date.now() + 24*60*60*1000);
+    try {
+      const codes = require('./codes');
+      if (codes.__memStore) {
+        codes.__memStore.set(code, { tier:'single', usesAllowed:1, uses:0, expiresAt });
+      }
+    } catch {}
+    return res.json({ ok:true, type, code, expiresAt });
   }
 
-  const { tier, usesAllowed = 1, minutesToLive = Number(process.env.CODE_EXPIRY_MINUTES || 1440) } = req.body || {};
-  if (!tier) return res.status(400).json({ ok: false, error: 'Missing tier' });
-
-  const db = getDb();
-  const col = db.collection('codes');
-  const expiresAt = new Date(Date.now() + minutesToLive * 60 * 1000);
-
-  const code = genCode();
-  await col.insertOne({ code, tier, usesAllowed, usesConsumed: 0, expiresAt, createdAt: new Date() });
-
-  return res.json({ ok: true, source: DEV_BYPASS ? 'dev-bypass' : 'square', code, tier, usesAllowed, expiresAt });
+  return res.json({ ok:true, type });
 });
+
+module.exports = router;
