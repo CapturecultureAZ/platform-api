@@ -46,6 +46,7 @@ app.get('/api/admin/codes', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
   }
 });
+app.use('/api', require('./routes/codes'));
 
 // Start server (work even if Mongo fails when mock enabled)
 const PORT = Number(process.env.PORT || 3000);
