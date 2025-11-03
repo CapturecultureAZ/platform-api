@@ -14,3 +14,14 @@ const PORT = Number(process.env.PORT || 10000);
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
+
+// --- debug: list mounted routes ---
+app.get('/__whoami', (req, res) => {
+  const routes = (app._router?.stack || [])
+    .filter(r => r.route && r.route.path)
+    .map(r => {
+      const method = Object.keys(r.route.methods)[0]?.toUpperCase() || 'GET';
+      return `${method} ${r.route.path}`;
+    });
+  res.json({ file: __filename, routes });
+});
