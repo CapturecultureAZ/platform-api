@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
+const { connectMongo } = require('./lib/db'); // 🔗 add Mongo connector
+
 const app = express();
 
 // Middleware
@@ -13,12 +15,10 @@ app.get('/', (_req, res) => res.send('✅ Platform API is running'));
 app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
 
 // Mount routes
-app.use('/api', require('./routes/codes'));
+try { app.use('/api', require('./routes/codes')); } catch (e) { console.error('codes route load error:', e); }
+try { app.use('/api', require('./routes/square')); } catch (e) { /* optional; ignore if missing */ }
 
-// Mount square webhook if present (won’t crash if missing)
-try { app.use('/api', require('./routes/square')); } catch (_) {}
-
-// Safe route inspector
+// Safe route inspector (no external deps)
 app.get('/__whoami', (_req, res) => {
   const routes = [];
   try {
@@ -36,12 +36,21 @@ app.get('/__whoami', (_req, res) => {
         }
       }
     }
-  } catch {}
+  } catch (_) {}
   res.json({ file: __filename, routes: routes.sort() });
 });
 
-// Start
+// Start ONLY after Mongo connects
 const PORT = Number(process.env.PORT || 3000);
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+const MONGO_URI = process.env.MONGO_URI;
+
+connectMongo(MONGO_URI)
+  .then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Server running on port ${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ Mongo connection failed:', err?.message || err);
+    process.exit(1);
+  });
