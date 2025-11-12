@@ -1,184 +1,138 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!doctype html>
 <html>
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2575.7">
-  <style type="text/css">
-    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; -webkit-text-stroke: #000000}
-    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; -webkit-text-stroke: #000000; min-height: 14.0px}
-    span.s1 {font-kerning: none}
+  <meta charset="utf-8">
+  <title>Keypad</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="x-build" content="keypad-single-2025-11-12">
+  <style>
+    html,body{height:100%}
+    body{margin:0;background:#000;color:#fff;font-family:-apple-system,system-ui;display:grid;place-items:center}
+    .wrap{width:100%;max-width:420px;padding:24px}
+    h1{margin:0 0 16px 0;text-align:center;font-weight:600}
+    #code{width:100%;font-size:32px;padding:20px;text-align:center;border-radius:12px;background:#111;color:#fff;border:none;margin-bottom:24px}
+    .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .keys button{font-size:32px;padding:24px;border:none;border-radius:12px;background:#222;color:#fff}
+    #go{background:#ff7a00}
+    #del{background:#333}
+    #status{margin-top:20px;text-align:center;font-size:18px;color:#bbb;min-height:1.6em}
+    .mark{position:fixed;bottom:8px;left:8px;opacity:.35;font:12px/1.2 -apple-system,system-ui}
   </style>
 </head>
 <body>
-<p class="p1"><span class="s1">&lt;!doctype html&gt;</span></p>
-<p class="p1"><span class="s1">&lt;html&gt;</span></p>
-<p class="p1"><span class="s1">&lt;head&gt;</span></p>
-<p class="p1"><span class="s1">&lt;meta charset="utf-8"&gt;</span></p>
-<p class="p1"><span class="s1">&lt;title&gt;Keypad&lt;/title&gt;</span></p>
-<p class="p1"><span class="s1">&lt;meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"&gt;</span></p>
-<p class="p1"><span class="s1">&lt;style&gt;</span></p>
-<p class="p1"><span class="s1">body {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>margin: 0;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>background: #000;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>color: #fff;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>font-family: -apple-system, system-ui;</span></p>
-<p class="p1"><span class="s1">}</span></p>
-<p class="p1"><span class="s1">.wrap { max-width: 420px; margin: 0 auto; padding: 24px; }</span></p>
-<p class="p1"><span class="s1">#code {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>width: 100%;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>font-size: 32px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>padding: 20px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>text-align: center;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>border-radius: 12px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>background: #111;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>color: #fff;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>border: none;</span></p>
-<p class="p1"><span class="s1">}</span></p>
-<p class="p1"><span class="s1">.keys {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>display: grid;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>grid-template-columns: repeat(3, 1fr);</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>gap: 16px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>margin-top: 24px;</span></p>
-<p class="p1"><span class="s1">}</span></p>
-<p class="p1"><span class="s1">.keys button {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>font-size: 28px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>padding: 20px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>border: none;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>border-radius: 12px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>background: #222;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>color: #fff;</span></p>
-<p class="p1"><span class="s1">}</span></p>
-<p class="p1"><span class="s1">.actions {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>display: flex;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>gap: 16px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>margin-top: 24px;</span></p>
-<p class="p1"><span class="s1">}</span></p>
-<p class="p1"><span class="s1">.actions button {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>flex: 1;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>font-size: 22px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>padding: 18px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>border: none;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>border-radius: 12px;</span></p>
-<p class="p1"><span class="s1">}</span></p>
-<p class="p1"><span class="s1">#go { background: #ff7a00; color: #fff; }</span></p>
-<p class="p1"><span class="s1">#clear { background: #333; color: #fff; }</span></p>
-<p class="p1"><span class="s1">#status {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>text-align: center;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>margin-top: 20px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>font-size: 18px;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>color: #bbb;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>min-height: 1.6em;</span></p>
-<p class="p1"><span class="s1">}</span></p>
-<p class="p1"><span class="s1">&lt;/style&gt;</span></p>
-<p class="p1"><span class="s1">&lt;/head&gt;</span></p>
-<p class="p1"><span class="s1">&lt;body&gt;</span></p>
-<p class="p1"><span class="s1">&lt;div class="wrap"&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>&lt;h1 style="text-align:center;margin:0 0 16px 0"&gt;Enter Your Code&lt;/h1&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>&lt;input id="code" maxlength="6" inputmode="numeric" autocomplete="off" aria-label="6-digit code"&gt;</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>&lt;div class="keys" id="pad"&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>&lt;button data-k="1"&gt;1&lt;/button&gt;&lt;button data-k="2"&gt;2&lt;/button&gt;&lt;button data-k="3"&gt;3&lt;/button&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>&lt;button data-k="4"&gt;4&lt;/button&gt;&lt;button data-k="5"&gt;5&lt;/button&gt;&lt;button data-k="6"&gt;6&lt;/button&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>&lt;button data-k="7"&gt;7&lt;/button&gt;&lt;button data-k="8"&gt;8&lt;/button&gt;&lt;button data-k="9"&gt;9&lt;/button&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>&lt;button data-k="del"&gt;Del&lt;/button&gt;&lt;button data-k="0"&gt;0&lt;/button&gt;&lt;button data-k="go" id="go"&gt;Go&lt;/button&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>&lt;/div&gt;</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>&lt;div class="actions"&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>&lt;button id="clear"&gt;Clear&lt;/button&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>&lt;/div&gt;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>&lt;div id="status" aria-live="polite"&gt;&lt;/div&gt;</span></p>
-<p class="p1"><span class="s1">&lt;/div&gt;</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1">&lt;script&gt;</span></p>
-<p class="p1"><span class="s1">(() =&gt; {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const CODE_LEN = 6;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const $ = (s) =&gt; document.querySelector(s);</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const codeInput = $('#code');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const pad = $('#pad');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const goBtn = $('#go');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const clearBtn = $('#clear');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const status = $('#status');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>let busy = false;</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const setStatus = (msg) =&gt; status.textContent = msg || '';</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const setCode = (v) =&gt; {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>const next = (v || '').replace(/\D+/g, '').slice(0, CODE_LEN);</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>codeInput.value = next;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (next.length === CODE_LEN) submit();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>};</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const push = (d) =&gt; { if (!busy) setCode((codeInput.value || '') + d); };</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const delOne = () =&gt; { if (!busy) setCode((codeInput.value || '').slice(0, -1)); };</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>const clearAll = () =&gt; { if (!busy) { setCode(''); setStatus(''); } };</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>async function submit() {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (busy) return;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>const code = (codeInput.value || '').trim();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (!/^\d{6}$/.test(code)) { setStatus('Please enter 6 digits.'); return; }</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>busy = true; setStatus('Checking code…');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>try {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>const ctl = new AbortController();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>const t = setTimeout(() =&gt; ctl.abort(), 10000);</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>const res = await fetch('/api/codes/validate', {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>method: 'POST',</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>headers: { 'Content-Type': 'application/json' },</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>body: JSON.stringify({ code, consume: true }),</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>signal: ctl.signal</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>});</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>clearTimeout(t);</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>const data = await res.json().catch(() =&gt; ({}));</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>if (!res.ok || !data.ok) {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>setStatus(data.message || 'Invalid or expired code.');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>busy = false;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>return;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>}</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>setStatus('Code accepted — launching…');</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>if (data.launchUrl) {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>window.location.href = data.launchUrl;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>return;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>}</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>if (data.sessionId &amp;&amp; data.config) {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>window.sessionStorage.setItem('session', JSON.stringify({</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">          </span>sessionId: data.sessionId, tier: data.tier, config: data.config, code: data.code</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>}));</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>window.location.href = '/capture.html';</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">        </span>return;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>}</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>setStatus('Server response missing launch/session info.');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>busy = false;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>} catch (e) {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>setStatus('Network error. Check Wi-Fi/API.');</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">      </span>busy = false;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>}</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>}</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>pad.addEventListener('click', (ev) =&gt; {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>const b = ev.target.closest('button'); if (!b) return;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>const k = (b.getAttribute('data-k') || b.textContent || '').trim().toLowerCase();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (/^\d$/.test(k)) return push(k);</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (k === 'del') return delOne();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (k === 'go') return submit();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>});</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>pad.addEventListener('touchstart', (ev) =&gt; {</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>const b = ev.target.closest('button'); if (!b) return;</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>ev.preventDefault();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>const k = (b.getAttribute('data-k') || b.textContent || '').trim().toLowerCase();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (/^\d$/.test(k)) return push(k);</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (k === 'del') return delOne();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">    </span>if (k === 'go') return submit();</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>}, { passive: false });</span></p>
-<p class="p2"><span class="s1"></span><br></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>clearBtn.addEventListener('click', clearAll);</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>clearBtn.addEventListener('touchstart', (e) =&gt; { e.preventDefault(); clearAll(); }, { passive: false });</span></p>
-<p class="p1"><span class="s1"><span class="Apple-converted-space">  </span>goBtn.addEve</span></p>
+  <div class="wrap">
+    <h1>Enter Your Code</h1>
+    <input id="code" maxlength="6" inputmode="numeric" autocomplete="off" aria-label="6-digit code">
+    <div id="pad" class="keys"></div>
+    <div id="status" aria-live="polite"></div>
+  </div>
+
+  <div class="mark">build: keypad-single-2025-11-12</div>
+
+  <script>
+  (function(){
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs){ regs.forEach(function(r){ r.unregister(); }); });
+    }
+
+    var CODE_LEN = 6;
+    var API_URL = '/api/codes/validate';
+
+    var $ = function(s){ return document.querySelector(s); };
+    var pad = $('#pad');
+    var codeInput = $('#code');
+    var status = $('#status');
+
+    pad.innerHTML = '';
+    var keys = ['1','2','3','4','5','6','7','8','9','del','0','go'];
+    for (var i=0;i<keys.length;i++){
+      var k = keys[i];
+      var b = document.createElement('button');
+      b.textContent = (k==='del'?'Del':k==='go'?'Go':k);
+      if (k==='del') b.id='del';
+      if (k==='go')  b.id='go';
+      b.setAttribute('data-k', k);
+      pad.appendChild(b);
+    }
+
+    var busy = false;
+
+    function setStatus(m){ status.textContent = m || ''; }
+    function setCode(v){
+      var next = String(v||'').replace(/\D+/g,'').slice(0, CODE_LEN);
+      codeInput.value = next;
+      if (next.length === CODE_LEN) submit();
+    }
+    function push(d){ if (!busy) setCode((codeInput.value||'') + d); }
+    function delOne(){ if (!busy) setCode((codeInput.value||'').slice(0,-1)); }
+
+    pad.addEventListener('click', function(ev){
+      var b = ev.target.closest('button'); if(!b) return;
+      var k = b.getAttribute('data-k');
+      if (/^\d$/.test(k)) return push(k);
+      if (k==='del') return delOne();
+      if (k==='go') return submit();
+    });
+
+    pad.addEventListener('touchstart', function(ev){
+      var b = ev.target.closest('button'); if(!b) return;
+      ev.preventDefault();
+      var k = b.getAttribute('data-k');
+      if (/^\d$/.test(k)) return push(k);
+      if (k==='del') return delOne();
+      if (k==='go') return submit();
+    }, {passive:false});
+
+    window.addEventListener('keydown', function(e){
+      if (/^\d$/.test(e.key)) return push(e.key);
+      if (e.key === 'Backspace') return delOne();
+      if (e.key === 'Enter') return submit();
+    });
+
+    codeInput.setAttribute('inputmode','numeric');
+    codeInput.setAttribute('pattern','\\d*');
+
+    async function submit(){
+      if (busy) return;
+      var entered = (codeInput.value||'').trim();
+      if (!new RegExp('^\\d{' + CODE_LEN + '}$').test(entered)){
+        setStatus('Please enter ' + CODE_LEN + ' digits.');
+        return;
+      }
+      busy = true; setStatus('Checking code…');
+
+      try{
+        var ctl = new AbortController();
+        var t = setTimeout(function(){ ctl.abort(); }, 10000);
+        var res = await fetch(API_URL, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ code: entered, consume: true }),
+          signal: ctl.signal
+        });
+        clearTimeout(t);
+        var data = {};
+        try{ data = await res.json(); }catch(e){ data = {}; }
+
+        if (!res.ok || !data.ok){
+          setStatus((data && data.message) ? data.message : 'Invalid or expired code.');
+          busy = false; return;
+        }
+
+        setStatus('Code accepted — launching…');
+
+        var dest = '/capture.html'
+          + '?code=' + encodeURIComponent(data.code || '')
+          + '&tier=' + encodeURIComponent(data.tier || '')
+          + (data.event ? '&event=' + encodeURIComponent(data.event) : '');
+        window.location.href = dest;
+        return;
+      }catch(e){
+        setStatus('Network error. Check API.');
+        busy = false;
+      }
+    }
+  })();
+  </script>
 </body>
 </html>
