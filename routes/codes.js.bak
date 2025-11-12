@@ -1,0 +1,107 @@
+const express = require('express');
+const router = express.Router();
+
+/**
+ * Simple in-memory store for dev:
+ * codes[code] = { tier, usesAllowed, remainingUses, expiresAt }
+ */
+const codes = Object.create(null);
+
+// util: generate a 6-digit numeric code
+function genCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+// periodic cleanup of expired codes
+setInterval(() => {
+  const now = Date.now();
+  for (const c of Object.keys(codes)) {
+    if (codes[c].expiresAt <= now) delete codes[c];
+  }
+}, 60_000);
+
+// health
+router.get('/codes/health', (_req, res) => res.json({ ok: true }));
+
+// POST /api/codes  { tier, usesAllowed, minutesToLive }
+router.post('/codes', (req, res) => {
+  try {
+    const { tier, usesAllowed = 1, minutesToLive = 60 } = req.body || {};
+    if (!tier) return res.status(400).json({ ok: false, message: 'Missing tier' });
+    const ua = Number(usesAllowed);
+    const mtl = Number(minutesToLive);
+    if (!Number.isFinite(ua) || ua < 1) return res.status(400).json({ ok: false, message: 'usesAllowed must be >=1' });
+    if (!Number.isFinite(mtl) || mtl < 1) return res.status(400).json({ ok: false, message: 'minutesToLive must be >=1' });
+
+    // ensure unique code (very unlikely to collide)
+    let code;
+    do { code = genCode(); } while (codes[code]);
+
+    const now = Date.now();
+    const expiresAt = now + mtl * 60_000;
+
+    codes[code] = {
+      tier,
+      usesAllowed: ua,
+      remainingUses: ua,
+      expiresAt
+    };
+
+    // Build a dev-friendly launch URL (use LAUNCH_BASE if set)
+    const base = process.env.LAUNCH_BASE || 'http://localhost:3000/launch.html';
+    const launchUrl = `${base}?code=${encodeURIComponent(code)}&tier=${encodeURIComponent(tier)}`;
+
+    res.json({
+      ok: true,
+      code,
+      tier,
+      usesAllowed: ua,
+      expiresAt: new Date(expiresAt).toISOString(),
+      route: 'numeric-codes-v2',
+      launchUrl
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: 'Server error', detail: String(err && err.message || err) });
+  }
+});
+
+// POST /api/codes/validate  { code, consume:boolean }
+router.post('/codes/validate', (req, res) => {
+  try {
+    const { code, consume = false } = req.body || {};
+    if (!code) return res.status(400).json({ ok: false, message: 'Missing code' });
+
+    const entry = codes[code];
+    if (!entry) return res.json({ ok: false, error: 'NOT_FOUND' });
+
+    const now = Date.now();
+    if (entry.expiresAt <= now) {
+      delete codes[code];
+      return res.json({ ok: false, error: 'EXPIRED' });
+    }
+
+    if (consume) {
+      if (entry.remainingUses <= 0) {
+        return res.json({ ok: false, error: 'NO_USES_LEFT' });
+      }
+      entry.remainingUses -= 1;
+    }
+
+    const base = process.env.LAUNCH_BASE || 'http://localhost:3000/launch.html';
+    const launchUrl = `${base}?code=${encodeURIComponent(code)}&tier=${encodeURIComponent(entry.tier)}`;
+
+    res.json({
+      ok: true,
+      code,
+      tier: entry.tier,
+      remainingUses: entry.remainingUses,
+      expiresAt: new Date(entry.expiresAt).toISOString(),
+      route: 'numeric-codes-v2',
+      launchUrl
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: 'Server error', detail: String(err && err.message || err) });
+  }
+});
+
+module.exports = router;

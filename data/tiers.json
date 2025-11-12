@@ -1,0 +1,5 @@
+{
+  "single": "/capture.html?code={code}&tier=single&event=DemoEvent",
+  "double": "/capture.html?code={code}&tier=double&event=DemoEvent",
+  "triple": "/capture.html?code={code}&tier=triple&event=DemoEvent"
+}

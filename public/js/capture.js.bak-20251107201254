@@ -1,0 +1,134 @@
+const els = {
+  gate:       document.getElementById('gate'),
+  startBtn:   document.getElementById('startBtn'),
+
+  live:       document.getElementById('live'),
+  video:      document.getElementById('video'),
+
+  preview:    document.getElementById('preview'),
+  photo:      document.getElementById('photo'),
+  canvas:     document.getElementById('canvas'),
+
+  ctrLive:    document.getElementById('controls-live'),
+  ctrPreview: document.getElementById('controls-preview'),
+  captureBtn: document.getElementById('captureBtn'),
+  retakeBtn:  document.getElementById('retakeBtn'),
+  useBtn:     document.getElementById('useBtn'),
+};
+
+let stream = null;
+
+/* Show screen + correct controls */
+function show(id) {
+  ['gate','live','preview'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.classList.add('hidden');
+  });
+  document.getElementById(id)?.classList.remove('hidden');
+
+  if (id === 'live') {
+    els.ctrLive.style.display = 'flex';
+    els.ctrPreview.style.display = 'none';
+  } else if (id === 'preview') {
+    els.ctrLive.style.display = 'none';
+    els.ctrPreview.style.display = 'flex';
+  } else {
+    els.ctrLive.style.display = 'none';
+    els.ctrPreview.style.display = 'none';
+  }
+}
+
+/* Camera only (no fullscreen API) */
+async function getCamera() {
+  const constraints = {
+    audio: false,
+    video: {
+      facingMode: { ideal: 'environment' }, // prefer back camera
+      width:  { ideal: 1920 },
+      height: { ideal: 1080 }
+    }
+  };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    els.video.srcObject = stream;
+    await els.video.play().catch(()=>{});
+  } catch (err) {
+    banner('Camera error: ' + (err?.message || String(err)));
+    console.error(err);
+  }
+}
+
+/* Capture still with object-fit: cover crop */
+function takePhoto() {
+  const video = els.video;
+  const canvas = els.canvas;
+  canvas.width  = video.videoWidth  || window.innerWidth;
+  canvas.height = video.videoHeight || window.innerHeight;
+
+  const ctx = canvas.getContext('2d');
+  const vw = video.videoWidth  || window.innerWidth;
+  const vh = video.videoHeight || window.innerHeight;
+  const cw = canvas.width, ch = canvas.height;
+
+  const vRatio = vw / vh, cRatio = cw / ch;
+  let sx, sy, sw, sh;
+  if (vRatio > cRatio) {       // video wider => crop sides
+    sh = vh; sw = vh * cRatio; sx = (vw - sw) / 2; sy = 0;
+  } else {                     // video taller => crop top/bottom
+    sw = vw; sh = vw / cRatio; sx = 0; sy = (vh - sh) / 2;
+  }
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+  return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+/* Strong tap wiring across Safari (click + touchstart + pointerdown) */
+function wireTap(el, handler, name='') {
+  if (!el) return;
+  const wrapped = (ev) => { try { ev.preventDefault(); ev.stopPropagation(); } catch(_){} banner(`${name} tapped`); handler(); };
+  el.addEventListener('click', wrapped, { passive: false });
+  el.addEventListener('touchstart', wrapped, { passive: false });
+  el.addEventListener('pointerdown', wrapped, { passive: false });
+}
+
+/* Debug banner */
+function banner(msg) {
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#0a0;color:#fff;z-index:2147483647;font:14px/1.4 -apple-system,system-ui';
+  m.textContent = msg;
+  document.body.appendChild(m);
+  setTimeout(() => m.remove(), 1200);
+}
+
+/* Start (no fullscreen) */
+wireTap(els.startBtn, async () => {
+  await getCamera();
+  show('live');
+}, 'START');
+
+/* Capture / Retake / Use */
+wireTap(els.captureBtn, () => {
+  const dataUrl = takePhoto();
+  els.photo.src = dataUrl;
+  show('preview');
+}, 'CAPTURE');
+
+wireTap(els.retakeBtn, () => {
+  show('live');
+}, 'RETAKE');
+
+wireTap(els.useBtn, () => {
+  // TODO: send to AI / continue flow
+  history.back(); // placeholder
+}, 'USE');
+
+/* Stop camera when leaving */
+window.addEventListener('pagehide', () => {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+});
+
+/* Visual heartbeat — tiny green dot means JS running */
+(() => {
+  const dot = document.createElement('div');
+  dot.style.cssText = 'position:fixed;right:8px;top:8px;width:10px;height:10px;border-radius:50%;background:#2ecc71;z-index:2147483647';
+  document.body.appendChild(dot);
+})();

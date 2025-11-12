@@ -1,0 +1,118 @@
+// keypad.js — validate WITHOUT consuming; redirect on success
+
+const codeEl = document.getElementById('code');
+const padEl  = document.getElementById('pad');
+const msgEl  = document.getElementById('msg');
+
+const API_VALIDATE = '/api/codes/validate';
+const MAX_LEN = 6;
+
+const params = new URLSearchParams(location.search);
+const prefix = (params.get('prefix') || '').replace(/\D/g, '');
+let value = prefix;
+sync();
+window.addEventListener('load', () => { try { codeEl.focus(); } catch(_){} });
+
+['1','2','3','4','5','6','7','8','9','0','C','⌫'].forEach(k => {
+  const b = document.createElement('button');
+  b.textContent = k;
+  b.addEventListener('click', () => onKey(k));
+  padEl.appendChild(b);
+});
+const go = document.createElement('button');
+go.textContent = 'Go';
+go.className = 'go';
+go.addEventListener('click', submit);
+padEl.appendChild(go);
+
+codeEl.addEventListener('beforeinput', e => e.preventDefault());
+codeEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submit(); return; }
+  if (e.key === 'Backspace') { e.preventDefault(); backspace(); return; }
+  if (/^\d$/.test(e.key)) { e.preventDefault(); addDigit(e.key); return; }
+  e.preventDefault();
+});
+
+function onKey(k){
+  if (k === 'C') return clearAll();
+  if (k === '⌫') return backspace();
+  addDigit(k);
+}
+
+function addDigit(d){
+  if (!/^\d$/.test(d)) return;
+  const typed = value.slice(prefix.length);
+  const maxTyped = Math.max(0, MAX_LEN - prefix.length);
+  if (typed.length >= maxTyped) return;
+  value += d;
+  sync();
+}
+
+function backspace(){
+  if (value.length > prefix.length) {
+    value = value.slice(0, -1);
+    sync();
+  }
+}
+
+function clearAll(){
+  value = prefix;
+  sync();
+}
+
+function sync(){
+  codeEl.value = value;
+  show('', '');
+}
+
+function show(text, cls){
+  msgEl.textContent = text || '';
+  msgEl.className = `msg ${cls || ''}`;
+}
+
+let submitting = false;
+
+async function submit(){
+  if (submitting) return;
+
+  const typed = value.slice(prefix.length);
+  if (!typed){ show('Enter your code', 'err'); return; }
+
+  submitting = true;
+  setPadDisabled(true);
+  show('Checking code…');
+
+  try{
+    const res = await fetch(API_VALIDATE, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ code: value, consume: false })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok){
+      show(data.error || 'Invalid or expired code', 'err');
+      return;
+    }
+
+    show('Code accepted. Launching…', 'ok');
+
+    if (data.launchUrl){
+      setTimeout(() => { window.location.href = data.launchUrl; }, 150);
+      return;
+    }
+
+    show('No launch URL configured', 'err');
+
+  } catch {
+    show('Network error. Check Wi-Fi.', 'err');
+  } finally {
+    submitting = false;
+    setPadDisabled(false);
+  }
+}
+
+function setPadDisabled(disabled){
+  padEl.querySelectorAll('button').forEach(b => b.disabled = disabled);
+}

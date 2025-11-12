@@ -1,0 +1,168 @@
+(() => {
+  const els = {
+    video: document.getElementById('video'),
+    status: document.getElementById('status'),
+    loading: document.getElementById('loading'),
+    previewLayer: document.getElementById('previewLayer'),
+    resultLayer: document.getElementById('resultLayer'),
+    resultImage: document.getElementById('resultImage'),
+    buffer: document.getElementById('buffer'),
+    captureBtn: document.getElementById('captureBtn'),
+    retakeBtn: document.getElementById('retakeBtn'),
+    sendBtn: document.getElementById('sendBtn'),
+  };
+
+  // ---- CONFIG ----
+  const JPEG_QUALITY = 0.95;
+  const TARGET_MAX   = 2560;
+  // ----------------
+
+  let stream = null;
+  let busy = false;       // global guard to stop “random” double-actions
+
+  const setStatus   = (m) => (els.status.textContent = m);
+  const showLoading = (on) => els.loading.classList.toggle('active', !!on);
+  const showResult  = (on) => {
+    els.resultLayer.classList.toggle('show', !!on);
+    els.previewLayer.style.display = on ? 'none' : 'block';
+  };
+
+  // ===== Camera =====
+  async function startCamera() {
+    stopCamera();
+    try {
+      setStatus('Requesting camera…');
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
+      });
+      els.video.srcObject = stream;
+      els.video.classList.add('mirrored');
+      // Ensure the element is actively playing
+      await els.video.play().catch(()=>{});
+      setStatus('Front camera ready');
+      return true;
+    } catch (err) {
+      console.error(err);
+      setStatus((err?.name||'Camera error')+' — '+(err?.message||'check permissions'));
+      alert('Camera failed: '+(err?.name||'Error')+'\n'+(err?.message||''));
+      return false;
+    }
+  }
+  function stopCamera() {
+    if (!stream) return;
+    for (const t of stream.getTracks()) t.stop();
+    stream = null;
+  }
+
+  // ===== Fullscreen (container only; never native video fullscreen) =====
+  async function enterFullscreenContainer() {
+    const el = els.previewLayer;
+    if (document.fullscreenElement) return;
+    try {
+      if (el.requestFullscreen) { await el.requestFullscreen(); return; }
+      if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); }
+    } catch (_) {}
+  }
+
+  // ===== Still capture (wait for a fresh frame) =====
+  function waitNextVideoFrame() {
+    return new Promise((resolve) => {
+      const v = els.video;
+      // Safari supports rVFC now; guard anyway
+      if ('requestVideoFrameCallback' in v) {
+        v.requestVideoFrameCallback(() => resolve());
+      } else {
+        // Fallback: ensure metadata + a tick
+        if (v.readyState >= 2) return requestAnimationFrame(() => resolve());
+        v.onloadeddata = () => requestAnimationFrame(() => resolve());
+      }
+    });
+  }
+
+  function drawFrameToCanvas() {
+    const v = els.video;
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw || !vh) return null;
+
+    let tw = vw, th = vh;
+    if (Math.max(vw, vh) > TARGET_MAX) {
+      const s = TARGET_MAX / Math.max(vw, vh);
+      tw = Math.round(vw * s); th = Math.round(vh * s);
+    }
+
+    const c = els.buffer;
+    c.width = tw; c.height = th;
+    const ctx = c.getContext('2d');
+
+    // Un-mirror the saved image (preview is mirrored for user)
+    ctx.translate(tw, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(v, 0, 0, tw, th);
+    return c;
+    }
+
+  async function captureStill() {
+    await waitNextVideoFrame();
+    const canvas = drawFrameToCanvas();
+    if (!canvas) return null;
+    return await new Promise((res) => canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY));
+  }
+
+  // ===== UI Actions =====
+  async function onCapture() {
+    if (busy) return;
+    busy = true;
+    try {
+      // Go fullscreen FIRST (on the container only)
+      await enterFullscreenContainer();
+
+      // Ensure camera is running
+      if (!stream) {
+        const ok = await startCamera();
+        if (!ok) return;
+      }
+
+      // Ensure playback
+      await els.video.play().catch(()=>{});
+
+      // Make a real still (not a “video shot” UI)
+      showLoading(true);
+      setStatus('Capturing…');
+      const blob = await captureStill();
+      if (!blob) return;
+
+      els.resultImage.src = URL.createObjectURL(blob);
+      showLoading(false);
+      showResult(true);
+      setStatus('Preview — full-screen');
+    } finally {
+      // small delay to stop rapid double taps from re-entering
+      setTimeout(() => { busy = false; }, 150);
+    }
+  }
+
+  function onRetake() {
+    if (els.resultImage.src?.startsWith('blob:')) URL.revokeObjectURL(els.resultImage.src);
+    els.resultImage.removeAttribute('src');
+    showResult(false);
+    setStatus('Front camera ready');
+  }
+
+  async function onSend() {
+    // Placeholder — integrate with backend
+    setStatus('Sent ✓');
+    setTimeout(onRetake, 500);
+  }
+
+  // ===== Bind =====
+  els.captureBtn.addEventListener('click', onCapture, { passive: true });
+  els.captureBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); onCapture(); }, { passive: false });
+  els.retakeBtn.addEventListener('click', onRetake, { passive: true });
+  els.retakeBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); onRetake(); }, { passive: false });
+  els.sendBtn.addEventListener('click', onSend, { passive: true });
+
+  // Try to pre-start camera (if already granted)
+  if (navigator.mediaDevices?.getUserMedia) startCamera();
+  else { setStatus('Camera API not supported'); alert('This browser does not support camera access.'); }
+})();

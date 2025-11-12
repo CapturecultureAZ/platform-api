@@ -1,0 +1,107 @@
+const AI_URL   = 'http://127.0.0.1:7001/remove';
+const AI_TOKEN = 'dev123';
+const qs = new URLSearchParams(location.search);
+const DEFAULT_BG = qs.get('bg') || 'https://picsum.photos/1600/1000';
+const DELIVER_TO = '/success.html';        // stub; later -> your platform-api upload
+const RESET_TO   = '/landing.html';        // page to return after showing result
+const SHOW_MS    = 2500;                   // how long to show result before reset
+const CAP_W      = 1280;                   // throttle size to reduce heat locally
+const CAP_H      = 720;
+
+const els = {
+  video:   document.getElementById('video'),
+  preview: document.getElementById('preview'),
+  spinner: document.getElementById('spinner'),
+};
+
+let stream = null;
+
+function spinner(on){ els.spinner.style.display = on ? 'flex':'none'; }
+
+async function goFullscreen(){
+  const el = document.documentElement;
+  try{
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+  }catch(_) {}
+}
+
+async function startCamera(){
+  stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:'user', width:{ideal:CAP_W}, height:{ideal:CAP_H} },
+    audio:false
+  });
+  els.video.srcObject = stream;
+  await els.video.play();
+}
+
+function stopCamera(){
+  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+}
+
+function captureFrame(){
+  const vw = els.video.videoWidth  || CAP_W;
+  const vh = els.video.videoHeight || CAP_H;
+
+  // scale to our throttle size while preserving aspect
+  const ratio = Math.min(CAP_W/vw, CAP_H/vh);
+  const w = Math.round(vw*ratio), h = Math.round(vh*ratio);
+
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.getContext('2d',{willReadFrequently:true}).drawImage(els.video,0,0,w,h);
+  return cv.toDataURL('image/png');
+}
+
+async function aiProcess(dataURL){
+  spinner(true);
+  const resp = await fetch(AI_URL, {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':'Bearer '+AI_TOKEN
+    },
+    body: JSON.stringify({ imageDataURL:dataURL, backdropUrl:DEFAULT_BG })
+  });
+  if (!resp.ok){
+    const t = await resp.text();
+    spinner(false);
+    throw new Error('AI '+resp.status+' '+t);
+  }
+  const blob = await resp.blob();
+  spinner(false);
+  return URL.createObjectURL(blob);
+}
+
+async function deliverStub(){
+  // later: POST final image to your platform-api (S3, etc.)
+  return true;
+}
+
+async function runOnce(){
+  await goFullscreen();
+  await startCamera();
+
+  // give the camera a moment to auto-expose/focus
+  await new Promise(r=>setTimeout(r, 600));
+
+  const dataURL = captureFrame();
+  stopCamera();
+
+  const url = await aiProcess(dataURL);
+
+  els.video.style.display = 'none';
+  els.preview.src = url;
+  els.preview.style.display = '';
+
+  await deliverStub();
+
+  // show result briefly, then reset to your landing/home
+  setTimeout(()=> { location.href = RESET_TO + '?ts=' + Date.now(); }, SHOW_MS);
+}
+
+window.addEventListener('pagehide', stopCamera);
+runOnce().catch(err=>{
+  spinner(false);
+  alert(err.message || err);
+});

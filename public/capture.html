@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Capture (Live Matte + Server Compose)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <style>
+    :root{
+      --bg:#0b0b0c; --fg:#fff; --muted:#b9bcc3;
+      --brand1:#ff7a00; --brand2:#ff2d55;
+      --glass:rgba(255,255,255,.10); --stroke:rgba(255,255,255,.18);
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui}
+    .screen{position:fixed;inset:0;display:none}
+    #ver{position:fixed;top:8px;left:12px;opacity:.5;font:12px/1 -apple-system,system-ui;z-index:10}
+    /* Live composited output (top layer we show) */
+    #matte{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:1}
+    /* Hidden video (source for the model and for confirm original frame) */
+    #cam{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0}
+    /* HUD & rail */
+    #hud{z-index:3;position:fixed;left:0;right:0;bottom:110px;display:flex;gap:12px;justify-content:center}
+    #backdrop-rail{z-index:3;position:fixed;left:0;right:0;bottom:0;padding:10px 12px;background:linear-gradient(0deg,rgba(0,0,0,.75),rgba(0,0,0,0))}
+    .rail{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+    .thumb{width:150px;height:88px;border-radius:12px;overflow:hidden;border:2px solid transparent;flex:0 0 auto;background:#111;cursor:pointer}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .thumb.sel{border-color:#fff}
+    .btn{font-size:20px;padding:14px 24px;border-radius:16px;border:0;cursor:pointer}
+    .btn-primary{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+    .btn-ghost{background:var(--glass);color:#fff;border:1px solid var(--stroke)}
+    .btn[disabled]{opacity:.5;filter:grayscale(1);cursor:not-allowed}
+    #count{z-index:4;position:fixed;inset:0;display:grid;place-items:center;font-size:22vmin;font-weight:800;letter-spacing:.02em}
+    /* Review */
+    #review{z-index:5}
+    #preview{position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+    #reviewHud{z-index:6;position:fixed;left:0;right:0;bottom:20px;display:flex;gap:12px;justify-content:center}
+    /* Toast */
+    #toast{position:fixed;top:12px;right:12px;z-index:6;display:none}
+    .pill{display:inline-block;padding:6px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--stroke);font-weight:600}
+  </style>
+</head>
+<body>
+  <div id="ver">Live Matte v2</div>
+
+  <!-- Hidden camera source -->
+  <video id="cam" playsinline autoplay muted></video>
+
+  <!-- Live composited output -->
+  <canvas id="matte"></canvas>
+  <div id="count" hidden>3</div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <button id="startBtn" class="btn btn-primary" onclick="onStart()" disabled>Start</button>
+    <button id="flipBtn" class="btn btn-ghost" onclick="flipCamera()">Flip</button>
+  </div>
+
+  <!-- Backdrop rail -->
+  <div id="backdrop-rail">
+    <div class="rail" id="rail"></div>
+  </div>
+
+  <!-- REVIEW -->
+  <section id="review" class="screen">
+    <img id="preview" alt="Preview"/>
+    <div id="reviewHud">
+      <button class="btn btn-ghost" onclick="retake()">Retake</button>
+      <button class="btn btn-primary" onclick="confirmPhoto()">Confirm</button>
+    </div>
+  </section>
+
+  <div id="toast" class="pill">Saving…</div>
+
+  <!-- Mediapipe (live segmentation) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <script>
+  const S=id=>document.getElementById(id);
+  const qs=new URLSearchParams(location.search);
+  let COUNTDOWN_SECONDS=5;
+  let allowRetake=true;
+  let usingUserFacing=true;
+  let currentStream=null;
+  let SELECTED_BG='';
+  let bgImg=null;
+
+  // Canvas / ctx
+  const matte = S('matte');
+  const mtx = matte.getContext('2d');
+
+  // Config
+  (async()=>{try{
+    const r=await fetch('/api/config'); const j=await r.json();
+    const v=Number(j?.COUNTDOWN_SECONDS||j?.countdownSeconds);
+    if(!Number.isNaN(v)&&v>0&&v<=30) COUNTDOWN_SECONDS=v;
+  }catch{}})();
+
+  // Camera helpers
+  function stopStream(){ try{currentStream?.getTracks?.().forEach(t=>t.stop());}catch{} }
+  async function startCamera(){
+    try{
+      stopStream();
+      currentStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: usingUserFacing ? 'user' : 'environment' },
+        audio: false
+      });
+      const v=S('cam'); v.srcObject=currentStream;
+      await v.play().catch(()=>{});
+      resizeCanvasToVideo(v);
+      document.documentElement.requestFullscreen?.().catch(()=>{});
+      startSegmentationLoop(); // (re)start Mediapipe loop
+    }catch{
+      alert('Camera error. In Safari: Settings > Websites > Camera > Allow.');
+    }
+  }
+  function resizeCanvasToVideo(v){
+    const w = v.videoWidth  || window.innerWidth;
+    const h = v.videoHeight || window.innerHeight;
+    matte.width = w; matte.height = h;
+  }
+  async function flipCamera(){ usingUserFacing=!usingUserFacing; await startCamera(); }
+
+  // Backdrops
+  async function loadBackdrops(){
+    const list=[];
+    const ev=qs.get('event');
+    if(ev){
+      try{
+        const r=await fetch(`/backdrops/events/${encodeURIComponent(ev)}/index.json`,{cache:'no-store'});
+        if(r.ok){ const arr=await r.json(); if(Array.isArray(arr)) list.push(...arr); }
+      }catch{}
+    }
+    if(!list.length){
+      const bgs=qs.get('bgs');
+      if(bgs){ list.push(...bgs.split(',').map(s=>s.trim()).filter(Boolean)); }
+    }
+    if(!list.length){
+      const g=i=>`https://picsum.photos/seed/cc${i}/1600/1200`;
+      list.push(g(1),g(2),g(3),g(4),g(5));
+    }
+    return list;
+  }
+  function buildRail(urls){
+    const rail=S('rail'); rail.innerHTML='';
+    urls.forEach(u=>{
+      const d=document.createElement('div'); d.className='thumb';
+      const img=new Image(); img.src=u; img.decoding='async'; img.loading='eager';
+      d.appendChild(img);
+      d.addEventListener('click',()=>selectBg(u,d));
+      rail.appendChild(d);
+    });
+    if(urls[0]) selectBg(urls[0], rail.firstChild); // auto-select first
+  }
+  function selectBg(url,el){
+    SELECTED_BG=url;
+    document.querySelectorAll('.thumb').forEach(t=>t.classList.remove('sel'));
+    el.classList.add('sel');
+    bgImg = new Image(); bgImg.crossOrigin='anonymous'; bgImg.src = url;
+    S('startBtn').disabled=false;
+  }
+
+  // Consume code (on Start)
+  async function consumeCodeOrBounce(){
+    const code=new URL(location.href).searchParams.get('code');
+    if(!code) return {ok:false,error:'missing code'};
+    try{
+      const r=await fetch('/api/codes/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,consume:true})});
+      const j=await r.json().catch(()=>({})); return j;
+    }catch{ return {ok:false,error:'network error'} }
+  }
+
+  // ===== Mediapipe SelfieSegmentation (live) =====
+  let selfieSegmentation=null, mpCamera=null, mpReady=false;
+
+  async function initMediapipe(){
+    selfieSegmentation = new SelfieSegmentation({locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`});
+    selfieSegmentation.setOptions({ modelSelection: 1 });
+    selfieSegmentation.onResults(onResults);
+    mpReady = true;
+  }
+
+  function startSegmentationLoop(){
+    if(!mpReady) return;
+    const video = S('cam');
+    try { mpCamera && mpCamera.stop(); } catch {}
+    mpCamera = new Camera(video, {
+      onFrame: async () => {
+        try {
+          const w = video.videoWidth, h = video.videoHeight;
+          if (w && h && (matte.width !== w || matte.height !== h)) {
+            matte.width = w; matte.height = h;
+          }
+          await selfieSegmentation.send({ image: video });
+        } catch {}
+      },
+      width: 1280,
+      height: 720
+    });
+    mpCamera.start();
+  }
+
+  function onResults(results){
+    const w = matte.width, h = matte.height;
+    const mask = results.segmentationMask;
+    mtx.save();
+    mtx.clearRect(0,0,w,h);
+    // draw camera
+    mtx.drawImage(results.image, 0, 0, w, h);
+    // keep only person
+    mtx.globalCompositeOperation = 'destination-in';
+    mtx.drawImage(mask, 0, 0, w, h);
+    // backdrop behind
+    mtx.globalCompositeOperation = 'destination-over';
+    if (bgImg && bgImg.complete) {
+      const scale = Math.max(w / bgImg.naturalWidth, h / bgImg.naturalHeight);
+      const bw = bgImg.naturalWidth*scale, bh = bgImg.naturalHeight*scale;
+      const bx = (w - bw) / 2, by = (h - bh) / 2;
+      mtx.drawImage(bgImg, bx, by, bw, bh);
+    } else {
+      const g = mtx.createLinearGradient(0,0,w,h);
+      g.addColorStop(0,'#101014'); g.addColorStop(1,'#1c1f28');
+      mtx.fillStyle = g; mtx.fillRect(0,0,w,h);
+    }
+    mtx.restore();
+  }
+
+  // ===== Flow =====
+  async function onStart(){
+    if(!SELECTED_BG){ alert('Choose a backdrop first.'); return; }
+    const cj = await consumeCodeOrBounce();
+    if (!cj.ok) { alert(cj.error || 'Invalid or used code.'); location.href='/keypad.html?event='+(qs.get('event')||'DemoEvent'); return; }
+    await countdown(COUNTDOWN_SECONDS);
+    // Freeze current composited frame to review
+    S('preview').src = matte.toDataURL('image/jpeg', 0.92);
+    show('review'); allowRetake = true;
+  }
+
+  async function countdown(n){
+    if(!n||n<=0) return;
+    const c=S('count'); c.hidden=false;
+    for(let i=n;i>0;i--){ c.textContent=i; await new Promise(r=>setTimeout(r,1000)); }
+    c.hidden=true;
+  }
+
+  async function retake(){
+    if(!allowRetake) return;
+    allowRetake=false; showNone();
+    // live loop is still running; just drop back to live
+    setTimeout(()=>{ allowRetake = true; }, 300);
+  }
+
+  function toast(msg, show=true){
+    const t=S('toast'); t.textContent=msg||'';
+    t.style.display = show ? 'inline-block' : 'none';
+  }
+
+  async function confirmPhoto(){
+    try{
+      toast('Saving…', true);
+      // Send ORIGINAL camera frame + chosen bg to server compose
+      const video = S('cam');
+      const c = document.createElement('canvas');
+      c.width  = video.videoWidth  || window.innerWidth;
+      c.height = video.videoHeight || window.innerHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(video, 0, 0, c.width, c.height);
+      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.95));
+
+      const fd = new FormData();
+      fd.append('image', blob, 'capture.jpg');
+      fd.append('bgUrl', SELECTED_BG);
+      fd.append('event', qs.get('event') || 'DemoEvent');
+      fd.append('code',  qs.get('code')  || '');
+
+      const r = await fetch('/api/compose', { method:'POST', body: fd });
+      const j = await r.json().catch(()=>({}));
+      if (j.ok && j.url) {
+        // OPTIONAL: show a quick success or QR here
+      } else {
+        alert('Save failed.');
+      }
+    }catch(e){
+      alert('Network error while saving.');
+    }finally{
+      toast('', false);
+      const ev = qs.get('event') || 'DemoEvent';
+      location.href = '/keypad.html?event='+ev;
+    }
+  }
+
+  function show(id){ document.querySelectorAll('.screen').forEach(s=>s.style.display='none'); S(id).style.display='block'; }
+  function showNone(){ document.querySelectorAll('.screen').forEach(s=>s.style.display='none'); }
+
+  // Boot
+  (async function boot(){
+    await initMediapipe();
+    await startCamera();
+    const urls = await loadBackdrops();
+    buildRail(urls);
+  })();
+  </script>
+</body>
+</html>

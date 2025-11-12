@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Capture (Project B)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <style>
+    :root{ --bg:#0b0b0c; --fg:#fff; }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui}
+    #live{position:fixed;inset:0;display:grid;place-items:center;background:#000}
+    video{width:100vw;height:100vh;object-fit:cover}
+    .hud{position:fixed;bottom:24px;left:0;right:0;display:flex;justify-content:center;gap:12px}
+    button{padding:12px 18px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;border-radius:999px;font-size:16px}
+  </style>
+</head>
+<body>
+  <section id="live">
+    <video id="v" autoplay playsinline muted></video>
+    <div class="hud">
+      <button id="snap">Capture</button>
+      <button id="retake" style="display:none">Retake</button>
+    </div>
+  </section>
+  <canvas id="c" style="display:none"></canvas>
+  <script>
+    const v = document.getElementById('v');
+    const c = document.getElementById('c');
+    const snap = document.getElementById('snap');
+    const retake = document.getElementById('retake');
+
+    async function start(){
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        v.srcObject = stream;
+      }catch(e){
+        alert('Allow camera for http://localhost:3000');
+        console.error(e);
+      }
+    }
+
+    snap.addEventListener('click', () => {
+      const vw = v.videoWidth, vh = v.videoHeight;
+      if (!vw || !vh) return;
+      c.width = vw; c.height = vh;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(v, 0, 0, vw, vh);
+      v.style.display = 'none';
+      c.style.display = 'block';
+      snap.style.display = 'none';
+      retake.style.display = 'inline-block';
+    });
+
+    retake.addEventListener('click', () => {
+      v.style.display = 'block';
+      c.style.display = 'none';
+      snap.style.display = 'inline-block';
+      retake.style.display = 'none';
+    });
+
+    start();
+  </script>
+</body>
+</html>

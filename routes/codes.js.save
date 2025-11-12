@@ -1,0 +1,65 @@
+Resourceconst express = require('express');
+const router = express.Router();
+const Code = require('../models/Code');
+
+// ✅ Health
+router.get('/codes/health', (_req, res) => res.json({ ok: true }));
+
+// ✅ Create a code
+router.post('/codes', async (req, res) => {
+  try {
+    const { tier = 'single', usesAllowed = 1, minutesToLive = 1440 } = req.body || {};
+    const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const expiresAt = new Date(Date.now() + minutesToLive * 60_000);
+
+    const doc = await Code.create({ code, tier, usesAllowed, uses: 0, expiresAt });
+    res.json({ ok: true, code: doc.code, tier: doc.tier, usesAllowed: doc.usesAllowed, expiresAt: doc.expiresAt });
+  } catch (error) {
+    console.error('POST /codes ERROR:', error);
+    res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// ✅ Validate / optionally consume a code
+router.post('/codes/validate', async (req, res) => {
+  try {
+    const { code, consume = false } = req.body || {};
+    const doc = await Code.findOne({ code: (code || '').toUpperCase() });
+
+    if (!doc) return res.status(404).json({ ok: false, error: 'CODE_NOT_FOUND' });
+    if (doc.expiresAt <= new Date()) return res.status(410).json({ ok: false, error: 'CODE_EXPIRED' });
+    if (doc.uses >= doc.usesAllowed) return res.status(409).json({ ok: false, error: 'CODE_EXHAUSTED' });
+
+    if (consume) {
+      doc.uses += 1;
+      await doc.save();
+    }
+
+    res.json({
+      ok: true,
+      code: doc.code,
+      tier: doc.tier,
+      usesAllowed: doc.usesAllowed,
+      uses: doc.uses,
+      remaining: doc.usesAllowed - doc.uses,
+      expiresAt: doc.expiresAt
+    });
+  } catch (error) {
+    console.error('POST /codes/validate ERROR:', error);
+    res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+  }
+});
+
+// ✅ Admin: list all codes
+router.get('/admin/codes', async (_req, res) => {
+  try {
+    const docs = await Code.find().sort({ createdAt: -1 });
+    res.json({ ok: true, total: docs.length, codes: docs });
+  } catch (e) {
+    console.error('GET /admin/codes ERROR:', e);
+    res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+  }
+});
+
+module.exports = router;
+

@@ -1,0 +1,139 @@
+/* Kiosk auto-flow with multi-shot support.
+   Params:
+     shots = 1..N
+     bgs   = url1|url2|...
+*/
+const AI_URL   = 'http://127.0.0.1:7001/remove';
+const AI_TOKEN = 'dev123';
+
+// where kiosk returns after it finishes
+const RESET_TO   = '/keypad.html';  // your keypad
+const SHOW_MS    = 1200;            // preview hold (we keep small)
+const CAP_W      = 1280;            // throttle (lower heat on Mac)
+const CAP_H      = 720;
+
+const els = {
+  video:   document.getElementById('video'),
+  preview: document.getElementById('preview'),
+  spinner: document.getElementById('spinner'),
+};
+
+let stream = null;
+
+function spinner(on){ els.spinner.style.display = on ? 'flex':'none'; }
+
+async function goFullscreen(){
+  const el = document.documentElement;
+  try{
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+  }catch(_) {}
+}
+
+async function startCamera(){
+  stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:'user', width:{ideal:CAP_W}, height:{ideal:CAP_H} },
+    audio:false
+  });
+  els.video.srcObject = stream;
+  await els.video.play();
+}
+
+function stopCamera(){
+  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+}
+
+function captureFrame(){
+  const vw = els.video.videoWidth  || CAP_W;
+  const vh = els.video.videoHeight || CAP_H;
+  const ratio = Math.min(CAP_W/vw, CAP_H/vh);
+  const w = Math.round(vw*ratio), h = Math.round(vh*ratio);
+
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.getContext('2d',{willReadFrequently:true}).drawImage(els.video,0,0,w,h);
+  return cv.toDataURL('image/png');
+}
+
+async function aiProcess(dataURL, backdropUrl){
+  spinner(true);
+  const resp = await fetch(AI_URL, {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':'Bearer '+AI_TOKEN
+    },
+    body: JSON.stringify({ imageDataURL:dataURL, backdropUrl })
+  });
+  if (!resp.ok){
+    const t = await resp.text();
+    spinner(false);
+    throw new Error('AI '+resp.status+' '+t);
+  }
+  const blob = await resp.blob();
+  spinner(false);
+  return URL.createObjectURL(blob);
+}
+
+async function deliverStub(_url){
+  // TODO: POST to platform-api /v1/sessions/:id/upload
+  // For now, do nothing—just simulate success
+  return true;
+}
+
+function getShotsFromQuery(){
+  const qs = new URLSearchParams(location.search);
+  const n = parseInt(qs.get('shots') || '1', 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 6) : 1; // cap for safety
+}
+
+function getBackdropsFromQuery(shots){
+  const qs = new URLSearchParams(location.search);
+  const bgs = (qs.get('bgs') || '').split('|').filter(Boolean);
+  if (bgs.length === 0) {
+    // fallback demo backgrounds (visually different)
+    return Array.from({length:shots}, (_,i)=> `https://picsum.photos/seed/${Date.now()+i}/1600/1000`);
+  }
+  // extend if fewer than shots
+  while (bgs.length < shots) bgs.push(bgs[bgs.length-1]);
+  return bgs.slice(0, shots);
+}
+
+async function runSequence(){
+  await goFullscreen();
+
+  const shots = getShotsFromQuery();
+  const backdrops = getBackdropsFromQuery(shots);
+
+  // Optional: a tiny delay before first capture for auto-exposure
+  await new Promise(r=>setTimeout(r, 300));
+
+  for (let i=0; i<shots; i++){
+    await startCamera();
+    // settle per shot
+    await new Promise(r=>setTimeout(r, 350));
+
+    const dataURL = captureFrame();
+    stopCamera();
+
+    const url = await aiProcess(dataURL, backdrops[i]);
+
+    // We keep preview minimal (or you can skip preview entirely)
+    els.video.style.display = 'none';
+    els.preview.src = url;
+    els.preview.style.display = '';
+    await deliverStub(url);
+    await new Promise(r=>setTimeout(r, SHOW_MS));
+    els.preview.style.display = 'none';
+    els.video.style.display = '';
+  }
+
+  // back to keypad (home)
+  location.href = RESET_TO + '?ts=' + Date.now();
+}
+
+window.addEventListener('pagehide', stopCamera);
+runSequence().catch(err=>{
+  spinner(false);
+  alert(err.message || err);
+});

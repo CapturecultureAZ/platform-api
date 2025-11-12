@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>rembg local tester</title>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; background:#111; color:#eee }
+    .row { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap }
+    img { max-width: 46vw; height:auto; background:#222; border-radius:12px }
+    input, button { font-size:16px; padding:10px; border-radius:10px; border:1px solid #333; background:#1a1a1a; color:#eee }
+    button { cursor:pointer }
+    label { display:block; margin-top:10px }
+  </style>
+</head>
+<body>
+  <h2>Local AI removal + backdrop test</h2>
+  <div class="row">
+    <div>
+      <label>Pick a photo (PNG/JPG)</label>
+      <input id="file" type="file" accept="image/*">
+      <label style="margin-top:14px">Backdrop URL</label>
+      <input id="bg" type="text" size="60" value="https://picsum.photos/1600/1000">
+      <div style="margin-top:14px">
+        <button id="go">Process</button>
+      </div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:20px">
+    <div>
+      <h4>Original</h4>
+      <img id="orig" alt="">
+    </div>
+    <div>
+      <h4>Result</h4>
+      <img id="out" alt="">
+    </div>
+  </div>
+<script>
+const AI_URL = 'http://127.0.0.1:7001/remove';
+const TOKEN  = 'dev123';
+
+const $ = (id) => document.getElementById(id);
+
+$('file').addEventListener('change', () => {
+  const f = $('file').files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { $('orig').src = r.result; };
+  r.readAsDataURL(f);
+});
+
+$('go').addEventListener('click', async () => {
+  const f = $('file').files[0];
+  if (!f) { alert('Choose a photo first'); return; }
+  const r = new FileReader();
+  r.onload = async () => {
+    try {
+      const imageDataURL = r.result;
+      const backdropUrl  = $('bg').value.trim() || null;
+      const resp = await fetch(AI_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + TOKEN
+        },
+        body: JSON.stringify({ imageDataURL, backdropUrl })
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        alert('Error: ' + resp.status + ' ' + t);
+        return;
+      }
+      const blob = await resp.blob();
+      $('out').src = URL.createObjectURL(blob);
+    } catch (e) {
+      alert('JS error: ' + e);
+    }
+  };
+  r.readAsDataURL(f);
+});
+</script>
+</body>
+</html>

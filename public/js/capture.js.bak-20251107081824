@@ -1,0 +1,137 @@
+const els = {
+  gate:       document.getElementById('gate'),
+  startBtn:   document.getElementById('startBtn'),
+
+  live:       document.getElementById('live'),
+  video:      document.getElementById('video'),
+
+  preview:    document.getElementById('preview'),
+  photo:      document.getElementById('photo'),
+  canvas:     document.getElementById('canvas'),
+
+  ctrLive:    document.getElementById('controls-live'),
+  ctrPreview: document.getElementById('controls-preview'),
+  captureBtn: document.getElementById('captureBtn'),
+  retakeBtn:  document.getElementById('retakeBtn'),
+  useBtn:     document.getElementById('useBtn'),
+};
+
+let stream = null;
+
+function show(id) {
+  ['gate','live','preview'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.classList.add('hidden');
+  });
+  document.getElementById(id)?.classList.remove('hidden');
+
+  if (id === 'live') {
+    els.ctrLive.style.display = 'flex';
+    els.ctrPreview.style.display = 'none';
+  } else if (id === 'preview') {
+    els.ctrLive.style.display = 'none';
+    els.ctrPreview.style.display = 'flex';
+  } else {
+    els.ctrLive.style.display = 'none';
+    els.ctrPreview.style.display = 'none';
+  }
+}
+
+async function ensureFullscreen() {
+  const el = document.documentElement;
+  const fs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (!fs) {
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    } catch(_) {}
+  }
+  // nudge to hide Safari bars
+  setTimeout(() => window.scrollTo(0, 1), 50);
+}
+async function enterFullscreen() { await ensureFullscreen(); }
+
+async function getCamera() {
+  const constraints = {
+    audio: false,
+    video: {
+      facingMode: { ideal: 'environment' }, // back camera when available
+      width:  { ideal: 1920 },
+      height: { ideal: 1080 }
+    }
+  };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    els.video.srcObject = stream;
+    await els.video.play().catch(()=>{});
+  } catch (err) {
+    const m = document.createElement('div');
+    m.style.cssText = 'position:fixed;left:0;right:0;top:0;padding:12px;background:#900;color:#fff;z-index:10000;font:16px/1.4 -apple-system,system-ui';
+    m.textContent = 'Camera error: ' + (err?.message || String(err));
+    document.body.appendChild(m);
+    console.error(err);
+  }
+}
+
+function takePhoto() {
+  const video = els.video;
+  const canvas = els.canvas;
+  // size canvas to video res (fallback to viewport)
+  canvas.width  = video.videoWidth  || window.innerWidth;
+  canvas.height = video.videoHeight || window.innerHeight;
+
+  const ctx = canvas.getContext('2d');
+  const vw = video.videoWidth  || window.innerWidth;
+  const vh = video.videoHeight || window.innerHeight;
+  const cw = canvas.width, ch = canvas.height;
+
+  // emulate object-fit: cover (crop to fill)
+  const vRatio = vw / vh, cRatio = cw / ch;
+  let sx, sy, sw, sh;
+  if (vRatio > cRatio) {      // video wider => crop sides
+    sh = vh; sw = vh * cRatio;
+    sx = (vw - sw) / 2; sy = 0;
+  } else {                    // video taller => crop top/bottom
+    sw = vw; sh = vw / cRatio;
+    sx = 0; sy = (vh - sh) / 2;
+  }
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+  return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+// Make taps robust on iOS/Safari
+function onTap(handler) {
+  return (ev) => { try { ev.preventDefault(); ev.stopPropagation(); } catch(_){} handler(); };
+}
+
+els.startBtn?.addEventListener('click', onTap(async () => {
+  await enterFullscreen();
+  await getCamera();
+  show('live');
+  await ensureFullscreen();
+}));
+
+els.captureBtn?.addEventListener('click', onTap(() => {
+  const dataUrl = takePhoto();
+  els.photo.src = dataUrl;
+  show('preview');
+  ensureFullscreen();
+}));
+
+els.retakeBtn?.addEventListener('click', onTap(() => {
+  show('live');
+  ensureFullscreen();
+}));
+
+els.useBtn?.addEventListener('click', onTap(() => {
+  // TODO: send to AI / continue flow
+  history.back(); // placeholder
+}));
+
+// Stop camera when leaving
+window.addEventListener('pagehide', () => {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+});
+
+// Extra safety: ensure UI bar is on top
+[els.captureBtn, els.retakeBtn, els.useBtn].forEach(b => { if (b) b.style.zIndex = 10001; });

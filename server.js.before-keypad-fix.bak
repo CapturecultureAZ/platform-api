@@ -1,0 +1,53 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { connectMongo } = require('./lib/db');
+
+const app = express();
+app.use(cors());
+
+// Use express.json with verify so webhooks can still read req.rawBody
+app.use(express.json({
+  verify: (req, _res, buf) => { req.rawBody = buf; }
+}));
+
+app.get('/', (_req, res) => res.send('✅ Platform API is running'));
+app.get('/api/ping', (_req, res) => res.json({ ok: true, pong: true }));
+
+// Mount all /api routes
+app.use('/api', require('./routes'));
+
+// serve static files for kiosk
+app.use(express.static(path.join(__dirname,'public')));
+
+// direct route to keypad.html
+app.get('/keypad.html',(req,res)=>res.sendFile(path.join(__dirname,'public','keypad.html')));
+
+app.get('/__whoami', (_req, res) => {
+  const routes = [];
+  const stack = (app._router && app._router.stack) || [];
+  for (const layer of stack) {
+    if (layer?.route?.path) {
+      for (const m of Object.keys(layer.route.methods || {})) {
+        routes.push(`${m.toUpperCase()} ${layer.route.path}`);
+      }
+    } else if (layer?.name === 'router' && layer?.handle?.stack) {
+      for (const s of layer.handle.stack) {
+        if (s?.route?.path) {
+          for (const m of Object.keys(s.route.methods || {})) {
+            routes.push(`${m.toUpperCase()} ${s.route.path}`);
+          }
+        }
+      }
+    }
+  }
+  res.json({ ok: true, routes });
+});
+
+(async () => {
+  if (!process.env.MONGO_URI) { console.error('❌ Missing MONGO_URI'); process.exit(1); }
+  await connectMongo();
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+})();
