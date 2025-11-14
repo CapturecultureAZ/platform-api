@@ -1,219 +1,284 @@
-"use strict";
 
-require("dotenv").config();
+
 const path = require("path");
 const express = require("express");
-const helmet = require("helmet");
-const cors = require("cors");
+const dotenv = require("dotenv");
 const mongoose = require("mongoose");
-const { randomInt } = require("crypto");
+
+dotenv.config();
 
 const app = express();
+const PORT = Number(process.env.PORT || 3001);
 
-app.use(cors());
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public"), { maxAge: "1h" }));
+app.use(express.static(path.join(__dirname, "public")));
 
-let mongoReady = false;
-mongoose.set("bufferCommands", false);
-if (process.env.MONGO_URI) {
-  mongoose
-    .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000 })
-    .then(() => { console.log("✅ MongoDB connected"); mongoReady = true; })
-    .catch((err) => { console.error("❌ Mongo connect error:", err.message); mongoReady = false; });
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "keypad.html"));
+});
+
+app.get([/^\/dash$/, /^\/dashboard$/, /^\/app(?:\/.*)?$/], (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
+
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("Mongo connected"))
+  .catch((err) => console.error("Mongo connect error:", err.message));
+
+const codeSchema = new mongoose.Schema({
+  code: { type: String, index: true, unique: true },
+  tier: String,
+  usesAllowed: { type: Number, default: 1 },
+  remainingUses: { type: Number, default: 1 },
+  expiresAt: { type: Date },
+  event: String,
+  route: String,
+  launchUrl: String,
+});
+codeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+const Code = mongoose.model("Code", codeSchema);
+
+const jobSchema = new mongoose.Schema({
+  provider: String,
+  latencyMs: Number,
+  ok: Boolean,
+  fallback: Boolean,
+  errorPrimary: String,
+  venueId: String,
+  createdAt: { type: Date, default: Date.now },
+});
+const Job = mongoose.model("Job", jobSchema);
+
+const CODE_LENGTH = Number(process.env.CODE_LENGTH || 6);
+const CODE_EXPIRY_MINUTES = Number(process.env.CODE_EXPIRY_MINUTES || 1440);
+const CODE_ROUTE = process.env.CODE_ROUTE || "numeric-codes-v2";
+const BASE_LAUNCH_URL = process.env.BASE_LAUNCH_URL || "https://CaptureCultureAZ.com";
+const tierUrls = Object.create(null);
+
+function generateCode(totalLen = 6) {
+  const prefix = String(process.env.CODE_PREFIX || "");
+  const digits = "0123456789";
+  const need = Math.max(0, totalLen - prefix.length);
+  let body = "";
+  for (let i = 0; i < need; i++) body += digits[(Math.random() * 10) | 0];
+  return prefix + body;
 }
 
-const codeSchema = new mongoose.Schema(
-  {
-    code: { type: String, index: true },
-    tier: { type: String },
-    usesAllowed: { type: Number },
-    remainingUses: { type: Number },
-    expiresAt: { type: Date },
-    event: { type: String, default: null },
-    route: { type: String }
-  },
-  { timestamps: true }
-);
-const Code = mongoose.models.Code || mongoose.model("Code", codeSchema);
-
-function isMongoReady() { return mongoReady === true; }
-function digitsOnly(s) { return String(s || "").replace(/\D/g, ""); }
-
-function genCodeWithPrefix(prefix2, totalLen) {
-  const p = digitsOnly(prefix2);
-  const L = Number(totalLen || 6);
-  const n = Math.max(0, L - p.length);
-  if (n <= 0) return p.slice(0, L);
-  const min = Math.pow(10, n - 1);
-  const max = Math.pow(10, n) - 1;
-  const tail = String(randomInt(min, max + 1));
-  return p + tail;
+function buildLaunchUrl(tier, code) {
+  const tpl = tierUrls[tier];
+  if (tpl) return tpl.replace(/{code}/g, code).replace(/{tier}/g, tier);
+  const u = new URL(BASE_LAUNCH_URL);
+  u.searchParams.set("code", code);
+  u.searchParams.set("tier", tier);
+  return u.toString();
 }
 
-function normalizeIncomingCode(raw) {
-  const entered = digitsOnly(raw);
-  const prefix = digitsOnly(process.env.CODE_PREFIX || "");
-  const expectedLen = Number(process.env.CODE_LENGTH || 6);
-  if (entered.length === expectedLen) return entered;
-  if (entered.length === 4 && prefix.length === 2 && expectedLen === 6) {
-    return prefix + entered;
-  }
-  return entered;
-}
-
-function minutesFromNow(mins) { return new Date(Date.now() + mins * 60 * 1000); }
-
-function makeLaunchUrl(rec) {
-  const base = process.env.BASE_LAUNCH_URL || "https://CaptureCultureAZ.com";
-  const url = new URL(base);
-  url.searchParams.set("code", rec.code);
-  url.searchParams.set("tier", rec.tier);
-  if (rec.event) url.searchParams.set("event", rec.event);
-  return url.toString();
-}
-
-const memCodes = new Map();
-
-app.get("/api/health", (_req, res) => res.json({ ok: true, mongo: isMongoReady() }));
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 app.post("/api/codes", async (req, res) => {
   try {
-    const tier = req.body && typeof req.body.tier === "string" && req.body.tier ? req.body.tier : "single";
-    const usesAllowed = Number(req.body && req.body.usesAllowed ? req.body.usesAllowed : 1);
-    const minutesToLive = Number(req.body && req.body.minutesToLive ? req.body.minutesToLive : process.env.CODE_EXPIRY_MINUTES || 60);
-    const event = req.body && typeof req.body.event === "string" ? req.body.event : null;
-
-    const totalLen = Number(process.env.CODE_LENGTH || 6);
-    const code = genCodeWithPrefix(process.env.CODE_PREFIX || "", totalLen);
-
-    const record = {
+    const {
+      tier = "single",
+      usesAllowed = 1,
+      minutesToLive = CODE_EXPIRY_MINUTES,
+      event = "DemoEvent",
+      codeLength = CODE_LENGTH,
+    } = req.body || {};
+    const code = generateCode(Number(codeLength));
+    const expiresAt = new Date(Date.now() + Number(minutesToLive) * 60000);
+    const launchUrl = buildLaunchUrl(tier, code);
+    const doc = await Code.create({
       code,
       tier,
       usesAllowed,
       remainingUses: usesAllowed,
-      expiresAt: minutesFromNow(minutesToLive),
+      expiresAt,
       event,
-      route: process.env.CODE_ROUTE || "numeric-codes-v2"
-    };
-
-    if (isMongoReady()) {
-      await Code.create(record);
-    } else {
-      memCodes.set(code, { ...record });
-    }
-
+      route: CODE_ROUTE,
+      launchUrl,
+    });
     res.json({
       ok: true,
-      code: record.code,
-      tier: record.tier,
-      usesAllowed: record.usesAllowed,
-      remainingUses: record.remainingUses,
-      expiresAt: record.expiresAt,
-      route: record.route,
-      event: record.event,
-      launchUrl: makeLaunchUrl(record),
-      _backend: isMongoReady() ? "mongo" : "memory"
+      code: doc.code,
+      tier: doc.tier,
+      usesAllowed: doc.usesAllowed,
+      expiresAt: doc.expiresAt,
+      route: doc.route,
+      launchUrl: doc.launchUrl,
     });
   } catch (err) {
-    console.error("codes create error:", err);
-    res.status(500).json({ ok: false, error: "internal error" });
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
 app.post("/api/codes/validate", async (req, res) => {
   try {
-    const incoming = req.body && req.body.code ? req.body.code : "";
-    const code = normalizeIncomingCode(incoming);
-    const consume = !!(req.body && req.body.consume);
-    if (!code) return res.status(400).json({ ok: false, error: "missing code" });
-
-    let rec = null;
-
-    if (isMongoReady()) {
-      rec = await Code.findOne({ code });
-      if (!rec) return res.status(404).json({ ok: false, error: "not found" });
-      if (new Date(rec.expiresAt) < new Date()) return res.status(410).json({ ok: false, error: "expired" });
-      if (consume) {
-        if (rec.remainingUses <= 0) return res.status(409).json({ ok: false, error: "no remaining uses" });
-        rec.remainingUses -= 1;
-        await rec.save();
-      }
-    } else {
-      rec = memCodes.get(code);
-      if (!rec) return res.status(404).json({ ok: false, error: "not found" });
-      if (rec.expiresAt < new Date()) { memCodes.delete(code); return res.status(410).json({ ok: false, error: "expired" }); }
-      if (consume) {
-        if (rec.remainingUses <= 0) { memCodes.delete(code); return res.status(409).json({ ok: false, error: "no remaining uses" }); }
-        rec.remainingUses -= 1;
-        if (rec.remainingUses <= 0) memCodes.delete(code); else memCodes.set(code, rec);
-      }
+    const { code, consume = false } = req.body || {};
+    if (!code) return res.status(400).json({ ok: false, error: "MISSING_CODE" });
+    const doc = await Code.findOne({ code }).lean();
+    if (!doc) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+    if (doc.expiresAt && new Date(doc.expiresAt).getTime() < Date.now()) {
+      return res.status(410).json({ ok: false, error: "EXPIRED" });
     }
-
+    if (consume) {
+      const updated = await Code.findOneAndUpdate(
+        { code, remainingUses: { $gt: 0 } },
+        { $inc: { remainingUses: -1 } },
+        { new: true }
+      ).lean();
+      if (!updated) return res.status(409).json({ ok: false, error: "NO_REMAINING_USES" });
+      return res.json({
+        ok: true,
+        code: updated.code,
+        tier: updated.tier,
+        remainingUses: updated.remainingUses,
+        expiresAt: updated.expiresAt,
+        route: updated.route,
+        launchUrl: updated.launchUrl || buildLaunchUrl(updated.tier, updated.code),
+        consumed: true,
+      });
+    }
     res.json({
       ok: true,
-      code: rec.code,
-      tier: rec.tier,
-      usesAllowed: rec.usesAllowed,
-      remainingUses: rec.remainingUses,
-      expiresAt: rec.expiresAt,
-      route: rec.route,
-      event: rec.event || null,
-      launchUrl: makeLaunchUrl(rec),
-      _backend: isMongoReady() ? "mongo" : "memory"
+      code: doc.code,
+      tier: doc.tier,
+      remainingUses: doc.remainingUses,
+      expiresAt: doc.expiresAt,
+      route: doc.route,
+      launchUrl: doc.launchUrl || buildLaunchUrl(doc.tier, doc.code),
+      consumed: false,
     });
   } catch (err) {
-    console.error("codes validate error:", err);
-    res.status(500).json({ ok: false, error: "internal error" });
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-app.post("/kiosk/validate", express.urlencoded({ extended: false }), async (req, res) => {
-  try {
-    const entered = String(req.body.code || "");
-    const code = normalizeIncomingCode(entered);
-    const event = String(req.body.event || "");
-    if (!code) return res.redirect("/gate?e=missing");
+app.get("/api/tiers", (req, res) => res.json({ ok: true, tiers: tierUrls }));
 
-    const r = await fetch("http://127.0.0.1:3001/api/codes/validate", {
+app.put("/api/tiers/:tier", (req, res) => {
+  const { tier } = req.params;
+  const { url } = req.body || {};
+  if (!tier || !url) return res.status(400).json({ ok: false, error: "INVALID" });
+  tierUrls[tier] = url;
+  res.json({ ok: true, tier, url });
+});
+
+const BG_PROVIDER = (process.env.BG_PROVIDER || "REPLICATE").toUpperCase();
+
+async function replicatePredictImage(imageUrl) {
+  const token = process.env.REPLICATE_API_TOKEN;
+  const modelPath = process.env.REPLICATE_IMAGE_MODEL || "851-labs/background-remover";
+  const version = process.env.REPLICATE_IMAGE_VERSION || "";
+  if (!token) throw new Error("REPLICATE_API_TOKEN missing");
+
+  const start = Date.now();
+
+  async function startByModel() {
+    return await fetch(`https://api.replicate.com/v1/models/${modelPath}/predictions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, consume: false, event: event || undefined })
+      headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ input: { image: imageUrl } }),
     });
-    const j = await r.json();
-    if (!j.ok) {
-      const msg = encodeURIComponent(j.error || "invalid");
-      return res.redirect("/gate?e=" + msg);
-    }
+  }
 
-    const launch = j.launchUrl ? j.launchUrl : "/capture.html?code=" + encodeURIComponent(code) + (event ? "&event=" + encodeURIComponent(event) : "");
-    return res.redirect(launch);
-  } catch {
-    return res.redirect("/gate?e=network");
+  async function startByVersion() {
+    if (!version) throw new Error("Replicate model version not set in .env");
+    return await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ version, input: { image: imageUrl } }),
+    });
+  }
+
+  let startResp = await startByModel();
+  if (startResp.status === 404) startResp = await startByVersion();
+
+  if (!startResp.ok) {
+    const txt = await startResp.text();
+    throw new Error(`Replicate start failed: ${startResp.status} ${txt}`);
+  }
+
+  const startJson = await startResp.json();
+  const id = startJson.id;
+  const deadline = Date.now() + Number(process.env.AI_MAX_WAIT_MS || 20000);
+  const pollMs = Number(process.env.AI_POLL_INTERVAL_MS || 800);
+
+  while (Date.now() < deadline) {
+    const p = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+      headers: { Authorization: `Token ${token}` },
+    });
+    const j = await p.json();
+    if (j.status === "succeeded") {
+      const resultUrl = Array.isArray(j.output) ? j.output[0] : j.output;
+      return { provider: "REPLICATE", url: resultUrl, latencyMs: Date.now() - start, costCents: null };
+    }
+    if (j.status === "failed" || j.status === "canceled") {
+      throw new Error(`Replicate ${j.status}: ${j.error || "unknown error"}`);
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+
+  throw new Error("Replicate timed out while waiting for result");
+}
+
+async function removeBg(imageUrl) {
+  const key = process.env.REMOVE_BG_API_KEY;
+  if (!key) throw new Error("REMOVE_BG_API_KEY missing for fallback");
+  const start = Date.now();
+  const body = new URLSearchParams();
+  body.set("image_url", imageUrl);
+  body.set("size", "auto");
+  const r = await fetch("https://api.remove.bg/v1.0/removebg", {
+    method: "POST",
+    headers: { "X-Api-Key": key },
+    body,
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`remove.bg failed: ${r.status} ${t}`);
+  }
+  const buf = Buffer.from(await r.arrayBuffer());
+  const dataUrl = `data:image/png;base64,${buf.toString("base64")}`;
+  return { provider: "REMOVEBG", url: dataUrl, latencyMs: Date.now() - start, costCents: null };
+}
+
+async function removeBackgroundViaProvider(imageUrl) {
+  try {
+    if (BG_PROVIDER === "REPLICATE") return await replicatePredictImage(imageUrl);
+    if (BG_PROVIDER === "REMOVEBG") return await removeBg(imageUrl);
+    throw new Error(`Unknown BG_PROVIDER=${BG_PROVIDER}`);
+  } catch (e) {
+    if (BG_PROVIDER !== "REMOVEBG" && process.env.REMOVE_BG_API_KEY) {
+      const fb = await removeBg(imageUrl);
+      fb.fallback = true;
+      fb.errorPrimary = String(e.message || e);
+      return fb;
+    }
+    throw e;
+  }
+}
+
+app.post("/api/ai/remove", async (req, res) => {
+  try {
+    const { imageUrl } = req.body || {};
+    if (!imageUrl) return res.status(400).json({ ok: false, error: "imageUrl is required" });
+    const result = await removeBackgroundViaProvider(imageUrl);
+    try {
+      await Job.create({
+        provider: result.provider,
+        latencyMs: result.latencyMs,
+        ok: true,
+        fallback: !!result.fallback,
+        errorPrimary: result.errorPrimary || "",
+        venueId: (req.body && req.body.venueId) || "",
+      });
+    } catch (e) {}
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err.message || err) });
   }
 });
 
-app.get("/gate", (_req, res) => {
-  res.type("html").send([
-    "<!doctype html>",
-    "<html><head><meta charset='utf-8'><title>Kiosk</title>",
-    "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>",
-    "<style>body{margin:0;background:#000;color:#fff;font-family:-apple-system,system-ui}.w{max-width:420px;margin:0 auto;padding:24px;text-align:center}h1{margin:0 0 20px 0;font-size:28px}form{display:grid;gap:12px}input{font-size:32px;padding:18px;text-align:center;border-radius:12px;background:#111;color:#fff;border:none;width:100%}button{font-size:24px;padding:18px;border:none;border-radius:12px;background:#ff7a00;color:#fff}#err{font-size:18px;margin-top:12px;color:#f44}</style>",
-    "</head><body><div class='w'><h1>Enter Last 4</h1>",
-    "<form action='/kiosk/validate' method='POST'>",
-    "<input name='code' maxlength='4' inputmode='numeric' autocomplete='off'>",
-    "<input type='hidden' name='event' value=''>",
-    "<button type='submit'>Go</button>",
-    "</form><div id='err'></div></div>",
-    "<script>(function(){var p=new URLSearchParams(location.search);if(p.has('e')){document.getElementById('err').textContent=p.get('e');}})();</script>",
-    "</body></html>"
-  ].join(""));
-});
-
-app.get("/capture.html", (req, res) => res.sendFile(path.join(__dirname, "public", "capture.html")));
-app.get("/", (_req, res) => res.redirect("/gate"));
-
-const PORT = 3001;
-app.listen(PORT, '0.0.0.0', () => { console.log("✅ Server running on port " + PORT); });
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
